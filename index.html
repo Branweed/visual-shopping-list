@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#2563eb">
     <style>
         :root { --primary: #2563eb; --bg: #f8fafc; --surface: #ffffff; }
-        
+
         body { 
             font-family: system-ui, -apple-system, sans-serif; 
             background: var(--bg); 
@@ -19,7 +19,7 @@
         }
 
         *, *::before, *::after { box-sizing: border-box; }
-        
+
         h2 { margin-top: 0; margin-bottom: 10px; color: #1e293b; font-size: 1.1rem; }
 
         /* ====== MOBILE HEADER ====== */
@@ -37,7 +37,7 @@
         #app-container {
             position: relative; width: 100vw; height: calc(100vh - 55px - 60px); overflow: hidden;
         }
-        
+
         .panel { 
             background: var(--surface); padding: 15px; 
             display: flex; flex-direction: column; overflow-y: auto; 
@@ -69,18 +69,19 @@
             #mobile-header, #mobile-bottom-nav { display: none !important; }
             #app-container {
                 display: grid; grid-template-columns: 1fr 280px; grid-template-rows: 1fr 1fr; 
-                gap: 15px; height: 100vh; padding: 15px; margin: 0 auto; max-width: 1000px;
+                gap: 15px; height: 100vh; padding: 15px; margin: 0 auto; max-width: 1200px;
             }
             .panel { border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); padding: 12px; display: flex !important; }
             .mobile-view { position: static !important; display: flex !important; height: auto; background: var(--surface); }
             .panel-content { padding: 0; }
-            
+
             #view-stores { display: none !important; }
 
             #view-list { grid-column: 1; grid-row: 1; }
             #view-inventory { grid-column: 1; grid-row: 2; }
+            #view-meals { grid-column: 2; grid-row: 1; }
             #view-admin { 
-                grid-column: 2; grid-row: 1 / span 2; 
+                grid-column: 2; grid-row: 2; 
                 border: 2px dashed #cbd5e1; background: #f8fafc;
             }
         }
@@ -140,7 +141,7 @@
         .item-card img { width: 100%; height: 65px; object-fit: cover; border-radius: 6px; margin-bottom: 6px; }
         .item-card .name { font-weight: 600; font-size: 0.85rem; line-height: 1.2; }
         .item-card .inventory-aisle { font-size: 0.7rem; color: #64748b; margin-top: 4px; }
-        
+
         .delete-inventory-btn { position: absolute; top: 4px; right: 4px; background: rgba(239, 68, 68, 0.9); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .edit-inventory-btn { position: absolute; top: 4px; left: 4px; background: rgba(59, 130, 246, 0.9); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
@@ -159,9 +160,37 @@
         .in-cart .list-item-name { text-decoration: line-through; color: #94a3b8; }
         .remove-btn { background: #ef4444; color: white; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.8rem; font-weight: bold; }
 
+        /* ====== MEAL SUGGESTIONS UI ====== */
+        .meal-card {
+            background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;
+            margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .meal-title {
+            font-weight: 700; font-size: 1rem; color: #1e293b; margin-bottom: 8px;
+        }
+        .meal-coverage {
+            font-size: 0.85rem; color: #64748b; margin-bottom: 8px;
+            display: flex; justify-content: space-between;
+        }
+        .coverage-bar {
+            width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px; margin-bottom: 8px; overflow: hidden;
+        }
+        .coverage-fill {
+            height: 100%; background: #10b981; transition: width 0.3s;
+        }
+        .missing-items {
+            font-size: 0.8rem; color: #dc2626; margin-bottom: 8px;
+        }
+        .missing-items strong { display: block; margin-bottom: 4px; }
+        .add-meal-btn {
+            width: 100%; background: #10b981; color: white; border: none; 
+            padding: 8px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.9rem;
+        }
+        .add-meal-btn:active { transform: scale(0.98); }
+
         /* ====== BUTTONS & FORMS ====== */
         .full-width-btn { width: 100%; background: #10b981; color: white; border: none; padding: 14px; border-radius: 8px; font-weight: 700; font-size: 1rem; margin-top: 15px; cursor: pointer; }
-        
+
         .admin-form { display: flex; flex-direction: column; gap: 12px; }
         .admin-form input, .admin-form select { padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1rem; background: white; width: 100%; box-sizing: border-box; }
         .camera-btn { background: #6366f1; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; text-align: center; display: block; }
@@ -189,7 +218,7 @@
     </div>
 
     <div id="app-container">
-        
+
         <!-- TIER 1: MASTER LIST -->
         <div class="panel mobile-view active" id="view-list">
             <div class="panel-content" style="display: flex; flex-direction: column; height: 100%;">
@@ -201,7 +230,7 @@
                         <button id="desktop-delete-list-btn" style="background: #fee2e2; color: #dc2626; border:none; border-radius:4px; padding:4px 8px; cursor:pointer; font-size:0.8rem; font-weight:600;">🗑️ Delete</button>
                     </div>
                 </div>
-                
+
                 <!-- List Selection Bar -->
                 <div class="list-selector-bar" id="list-selector-bar"></div>
 
@@ -230,6 +259,16 @@
             </div>
         </div>
 
+        <!-- TIER 2.5: MEAL SUGGESTIONS -->
+        <div class="panel mobile-view" id="view-meals">
+            <div class="panel-content">
+                <h2 style="margin-bottom: 8px;">🍽️ Meal Ideas</h2>
+                <div id="meals-container" style="overflow-y: auto; flex-grow: 1;">
+                    <p style="color: #64748b; font-size: 0.9rem;">Add items to your list to see meal suggestions.</p>
+                </div>
+            </div>
+        </div>
+
         <!-- TIER 3: ADMIN / CREATE ITEM & CALENDAR -->
         <div class="panel mobile-view" id="view-admin">
             <div class="panel-content">
@@ -237,15 +276,15 @@
                 <div class="admin-form">
                     <input type="text" id="new-name" placeholder="Item Name (e.g. Eggs)">
                     <input type="text" id="new-aisle" placeholder="Aisle (e.g. Dairy or Aisle 4)">
-		            <input type="number" id="new-price" placeholder="Price (e.g. 2.99)" step="0.01">
-                    
+                    <input type="number" id="new-price" placeholder="Price (e.g. 2.99)" step="0.01">
+
                     <select id="new-store-select">
                         <option value="">Select Store...</option>
                         <option value="__ADD_NEW__">➕ Add New Store...</option>
                     </select>
 
                     <input type="text" id="new-image" placeholder="Image URL (or photo below)">
-                    
+
                     <label for="camera-input" class="camera-btn">📸 Take / Upload Photo</label>
                     <input type="file" id="camera-input" accept="image/*">
 
@@ -277,9 +316,13 @@
             <span class="icon">🛒</span>
             <span>Add Items</span>
         </button>
+        <button class="nav-tab-btn" data-target="view-meals">
+            <span class="icon">🍽️</span>
+            <span>Meals</span>
+        </button>
         <button class="nav-tab-btn" data-target="view-admin">
             <span class="icon">➕</span>
-            <span>Create & Plan</span>
+            <span>Create</span>
         </button>
     </div>
 
@@ -301,6 +344,59 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
+        // ====== MEAL SUGGESTIONS SYSTEM ======
+        const RECIPES = [
+            { name: "Tacos", ingredients: ["ground beef", "taco shells", "cheese", "lettuce", "tomato", "salsa"] },
+            { name: "Spaghetti", ingredients: ["pasta", "ground beef", "tomato sauce", "garlic", "onion", "parmesan cheese"] },
+            { name: "Chicken Stir Fry", ingredients: ["chicken breast", "broccoli", "bell pepper", "soy sauce", "garlic", "ginger", "rice"] },
+            { name: "Caesar Salad", ingredients: ["romaine lettuce", "parmesan cheese", "croutons", "caesar dressing", "chicken breast"] },
+            { name: "Grilled Cheese", ingredients: ["bread", "cheese", "butter"] },
+            { name: "Chili", ingredients: ["ground beef", "kidney beans", "tomato sauce", "onion", "garlic", "chili powder"] },
+            { name: "Quesadillas", ingredients: ["flour tortillas", "cheese", "chicken breast", "bell pepper", "onion", "sour cream"] },
+            { name: "Pancakes", ingredients: ["flour", "eggs", "milk", "baking powder", "butter", "maple syrup"] },
+            { name: "Fried Rice", ingredients: ["rice", "eggs", "soy sauce", "carrots", "peas", "onion", "garlic"] },
+            { name: "Pasta Carbonara", ingredients: ["pasta", "eggs", "bacon", "parmesan cheese", "black pepper"] },
+            { name: "Veggie Burger", ingredients: ["burger buns", "veggie patty", "lettuce", "tomato", "cheese", "condiments"] },
+            { name: "Fish Tacos", ingredients: ["fish", "taco shells", "cabbage", "lime", "cilantro", "sour cream"] }
+        ];
+
+        function normalize(str) {
+            return str.toLowerCase().trim()
+                .replace(/s$/, '') // Remove trailing 's' for plurals
+                .replace(/es$/, ''); // Remove 'es' plurals
+        }
+
+        function suggestMeals(groceryItems) {
+            const normalizedList = groceryItems.map(item => normalize(item.name));
+
+            const scored = RECIPES.map(recipe => {
+                const normalizedRecipe = recipe.ingredients.map(ing => normalize(ing));
+                const hasCount = normalizedRecipe.filter(ing => normalizedList.includes(ing)).length;
+                const missing = normalizedRecipe.filter(ing => !normalizedList.includes(ing));
+                
+                return {
+                    name: recipe.name,
+                    ingredients: recipe.ingredients,
+                    hasCount: hasCount,
+                    totalNeeded: normalizedRecipe.length,
+                    missing: missing.map(m => {
+                        // Denormalize back to readable form
+                        const orig = recipe.ingredients.find(ing => normalize(ing) === m);
+                        return orig || m;
+                    }),
+                    coverage: Math.round((hasCount / normalizedRecipe.length) * 100)
+                };
+            });
+
+            // Sort by coverage, show only meals with at least 50% ingredients
+            return scored
+                .filter(meal => meal.coverage >= 50)
+                .sort((a, b) => {
+                    if (b.coverage !== a.coverage) return b.coverage - a.coverage;
+                    return b.hasCount - a.hasCount;
+                });
+        }
+
         let stores = {}; 
         let currentStore = null; 
         let availableLists = [];
@@ -317,6 +413,7 @@
         const views = {
             'view-list': document.getElementById('view-list'),
             'view-inventory': document.getElementById('view-inventory'),
+            'view-meals': document.getElementById('view-meals'),
             'view-admin': document.getElementById('view-admin')
         };
         const mobileHeaderTitle = document.getElementById('mobile-header-title');
@@ -324,7 +421,7 @@
         navTabButtons.forEach(btn => {
             btn.onclick = () => {
                 const target = btn.getAttribute('data-target');
-                
+
                 navTabButtons.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
 
@@ -338,9 +435,73 @@
 
                 if (target === 'view-list') mobileHeaderTitle.textContent = currentListName;
                 if (target === 'view-inventory') mobileHeaderTitle.textContent = currentStore ? `${currentStore} Items` : 'Add Items';
+                if (target === 'view-meals') mobileHeaderTitle.textContent = '🍽️ Meal Ideas';
                 if (target === 'view-admin') mobileHeaderTitle.textContent = editingItemId ? 'Edit Item' : 'Create & Plan';
             };
         });
+
+        // ====== RENDER MEAL SUGGESTIONS ======
+        function renderMealSuggestions() {
+            const container = document.getElementById('meals-container');
+            
+            if (activeList.length === 0) {
+                container.innerHTML = '<p style="color: #64748b; font-size: 0.9rem;">Add items to your list to see meal suggestions.</p>';
+                return;
+            }
+
+            const suggestions = suggestMeals(activeList);
+
+            if (suggestions.length === 0) {
+                container.innerHTML = '<p style="color: #64748b; font-size: 0.9rem;">No meal ideas available yet with your current items. Keep adding!</p>';
+                return;
+            }
+
+            container.innerHTML = '';
+            suggestions.forEach(meal => {
+                const card = document.createElement('div');
+                card.className = 'meal-card';
+                
+                const missingText = meal.missing.length === 0 
+                    ? '✅ You have all ingredients!' 
+                    : `Missing: ${meal.missing.join(', ')}`;
+
+                card.innerHTML = `
+                    <div class="meal-title">🍽️ ${meal.name}</div>
+                    <div class="meal-coverage">
+                        <span>${meal.hasCount}/${meal.totalNeeded} ingredients</span>
+                        <span>${meal.coverage}%</span>
+                    </div>
+                    <div class="coverage-bar">
+                        <div class="coverage-fill" style="width: ${meal.coverage}%;"></div>
+                    </div>
+                    ${meal.missing.length > 0 ? `<div class="missing-items"><strong>Missing:</strong> ${meal.missing.join(', ')}</div>` : ''}
+                    <button class="add-meal-btn" data-meal="${meal.name}">Add Missing Items</button>
+                `;
+
+                card.querySelector('.add-meal-btn').onclick = async () => {
+                    if (meal.missing.length === 0) {
+                        alert('You already have all ingredients for this meal!');
+                        return;
+                    }
+                    
+                    for (const item of meal.missing) {
+                        await addDoc(collection(db, currentListId), {
+                            name: item,
+                            aisle: '',
+                            price: '',
+                            image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&q=80',
+                            store: currentStore || 'Other',
+                            addedAt: Date.now(),
+                            inCart: false
+                        });
+                    }
+                    
+                    alert(`✅ Added ${meal.missing.length} missing item(s) to your list!`);
+                };
+
+                container.appendChild(card);
+            });
+        }
 
         // ====== SHARE / TEXT EXPORT ======
         async function handleShareList() {
@@ -413,7 +574,7 @@
 
         function renderListTabs() {
             listSelectorBar.innerHTML = '';
-            
+
             availableLists.forEach(l => {
                 const tab = document.createElement('button');
                 tab.className = `list-tab ${l.id === currentListId ? 'active' : ''}`;
@@ -490,7 +651,7 @@
         function renderStoreBubblesAndDropdown() {
             storeSelector.innerHTML = '';
             mobileStoreList.innerHTML = '';
-            
+
             storeSelect.innerHTML = `
                 <option value="">Select Store...</option>
                 <option value="__ADD_NEW__">➕ Add New Store...</option>
@@ -554,11 +715,11 @@
                 const newNameInput = prompt(`Edit store name:`, storeToEdit);
                 if (newNameInput && newNameInput.trim() !== "") {
                     const updatedName = newNameInput.trim();
-                    
+
                     if (updatedName !== storeToEdit) {
                         const items = stores[storeToEdit] || [];
                         for (const item of items) await updateDoc(doc(db, "inventory", item.id), { store: updatedName });
-                        
+
                         for(const l of availableLists) {
                             const listSnap = await getDocs(collection(db, l.id));
                             listSnap.forEach(async (dDoc) => { 
@@ -600,12 +761,12 @@
                 const card = document.createElement('div');
                 card.className = 'item-card';
                 const aisleText = item.aisle ? `<div class="inventory-aisle">Aisle: ${item.aisle}</div>` : '';
-                
+
                 const parsedPrice = parseFloat(item.price);
                 const priceText = !isNaN(parsedPrice) && parsedPrice > 0 
                     ? `<div style="color: #10b981; font-weight: bold; font-size: 0.8rem; margin-top: 4px;">$${parsedPrice.toFixed(2)}</div>` 
                     : '';
-                
+
                 card.innerHTML = `
                     <button class="edit-inventory-btn" data-id="${item.id}">✏️</button>
                     <button class="delete-inventory-btn" data-id="${item.id}">✕</button>
@@ -614,10 +775,10 @@
                     ${aisleText} 
                     ${priceText}
                 `;
-                
+
                 card.onclick = async (e) => {
                     if (e.target.classList.contains('delete-inventory-btn') || e.target.classList.contains('edit-inventory-btn')) return; 
-                    
+
                     await addDoc(collection(db, currentListId), {
                         name: item.name, aisle: item.aisle || '', price: item.price || '', image: item.image,
                         store: currentStore, addedAt: Date.now(), inCart: false 
@@ -637,10 +798,10 @@
                     document.getElementById('new-price').value = item.price || '';
                     document.getElementById('new-image').value = item.image || '';
                     storeSelect.value = item.store || '';
-                    
+
                     document.getElementById('admin-header-title').innerHTML = "✏️ Edit Item";
                     document.getElementById('add-inventory-btn').textContent = "Update Item";
-                    
+
                     document.querySelector('[data-target="view-admin"]').click();
                 };
 
@@ -656,7 +817,7 @@
             }
 
             const grandTotal = activeList.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
-            
+
             const grandTotalDiv = document.createElement('div');
             grandTotalDiv.style.cssText = "display: flex; justify-content: space-between; background: #e0f2fe; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; font-weight: bold; font-size: 1.1rem; color: #1e293b;";
             grandTotalDiv.innerHTML = `<span>Grand Total</span> <span style="color: #10b981;">$${grandTotal.toFixed(2)}</span>`;
@@ -670,7 +831,7 @@
             });
 
             for (const [storeName, items] of Object.entries(groupedItems)) {
-                
+
                 items.sort((a, b) => {
                     const getAisleNumber = (aisleStr) => {
                         if (!aisleStr) return 999; 
@@ -692,7 +853,7 @@
                     const div = document.createElement('div');
                     div.className = `list-item ${item.inCart ? 'in-cart' : ''}`;
                     const aisleText = item.aisle ? `Aisle: ${item.aisle}` : '';
-                    
+
                     const parsedPrice = parseFloat(item.price);
                     const priceText = !isNaN(parsedPrice) && parsedPrice > 0 
                         ? `<span style="color: #10b981; font-weight: bold; margin-left: 8px;">$${parsedPrice.toFixed(2)}</span>` 
@@ -713,6 +874,9 @@
                     shoppingListContainer.appendChild(div);
                 });
             }
+
+            // Update meal suggestions whenever list changes
+            renderMealSuggestions();
         }
 
         const cameraInput = document.getElementById('camera-input');
@@ -747,9 +911,9 @@
             const priceInput = document.getElementById('new-price');
             const store = storeSelect.value;
             const name = nameInput.value.trim();
-            
+
             if (!name || !store || store === "__ADD_NEW__" || store.startsWith("__")) return alert("Name and valid Store required!");
-            
+
             let image = capturedImageBase64 || imageInputUrl.value.trim();
             if (!image || image.includes("Photo loaded")) image = "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&q=80";
 
@@ -775,7 +939,7 @@
                         createdAt: Date.now() 
                     });
                 }
-                
+
                 nameInput.value = ''; 
                 aisleInput.value = ''; 
                 priceInput.value = '';
@@ -783,7 +947,7 @@
                 imageInputUrl.style.color = "inherit"; 
                 capturedImageBase64 = ""; 
                 cameraInput.value = ""; 
-                
+
                 document.querySelector('[data-target="view-list"]').click();
             } catch (e) { alert("Could not save item."); }
         };
@@ -799,7 +963,7 @@
             ["Aldi", "BJ's", "Market Basket", "Wal-Mart"].forEach(defaultStore => { if (!stores[defaultStore]) stores[defaultStore] = []; });
             if (currentStore && !stores[currentStore]) currentStore = null;
             if (Object.keys(stores).length > 0 && !currentStore) currentStore = Object.keys(stores).sort()[0];
-            
+
             renderStoreBubblesAndDropdown(); renderInventory();
         });
 
@@ -841,7 +1005,7 @@
 
         let displayDate = new Date();
         const fullMonthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-        
+
         function renderMonthlyCalendar() {
             const container = document.getElementById('calendar-days-container');
             document.getElementById('calendar-month-title').textContent = `${fullMonthNames[displayDate.getMonth()]} ${displayDate.getFullYear()}`;
@@ -852,13 +1016,13 @@
             const firstDay = new Date(displayDate.getFullYear(), displayDate.getMonth(), 1).getDay();
             const totalDays = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 0).getDate();
             for (let i=0; i<firstDay; i++) container.appendChild(document.createElement('div'));
-            
+
             for (let day=1; day<=totalDays; day++) {
                 const cell = document.createElement('div'); cell.className = 'cal-day'; cell.textContent = day;
                 const dateKey = `${displayDate.getFullYear()}-${String(displayDate.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
                 if(new Date().toDateString() === new Date(displayDate.getFullYear(), displayDate.getMonth(), day).toDateString()) cell.classList.add('today');
                 if(calendarEvents.some(ev => ev.date === dateKey)) cell.classList.add('has-events');
-                
+
                 cell.onclick = () => {
                     const title = prompt(`Add event for ${fullMonthNames[displayDate.getMonth()]} ${day}:`);
                     if(title) addDoc(collection(db, "calendarEvents"), { title: title.trim(), date: dateKey, createdAt: Date.now() });
@@ -866,16 +1030,16 @@
                 container.appendChild(cell);
             }
         }
-        
+
         document.getElementById('prev-month-btn').onclick = () => { displayDate.setMonth(displayDate.getMonth()-1); renderMonthlyCalendar(); };
         document.getElementById('next-month-btn').onclick = () => { displayDate.setMonth(displayDate.getMonth()+1); renderMonthlyCalendar(); };
-        
+
         onSnapshot(collection(db, "calendarEvents"), (snapshot) => {
             calendarEvents = []; 
             snapshot.forEach(doc => calendarEvents.push({...doc.data(), id: doc.id})); 
             renderMonthlyCalendar();
         });
-        
+
         renderMonthlyCalendar();
     </script>
 </body>
