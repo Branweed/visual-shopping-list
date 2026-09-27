@@ -752,7 +752,7 @@
             reader.readAsDataURL(file);
         };
 
-        // ====== NEW: WRITTEN LIST OCR IMPORT PIPELINE ======
+        // ====== UPDATED: WRITTEN LIST OCR IMPORT WITH STRICT FILTERING & PREVIEW ======
         const ocrInput = document.getElementById('ocr-list-input');
         const ocrStatus = document.getElementById('ocr-status');
 
@@ -775,20 +775,34 @@
                     return;
                 }
 
-                // Clean and split lines
+                // Strict filtering to remove OCR handwriting noise & gibberish
                 const lines = rawText.split('\n')
                     .map(line => line.trim())
-                    .filter(line => line.length > 0)
+                    .filter(line => {
+                        // Drop lines that are too short/long or lack actual alphabetic characters
+                        if (line.length < 2 || line.length > 40) return false;
+                        const alphaCount = (line.match(/[a-zA-Z]/g) || []).length;
+                        if (alphaCount < 2) return false; 
+                        return true;
+                    })
                     .map(line => line.replace(/^[\d\-\*\•\.\)]+\s*/, '').trim())
                     .filter(line => line.length > 1);
 
                 if (lines.length === 0) {
-                    ocrStatus.textContent = "⚠️ Could not extract valid items from image.";
+                    ocrStatus.textContent = "⚠️ Could not extract valid items. Try better lighting.";
                     ocrStatus.style.color = "#ef4444";
                     return;
                 }
 
-                ocrStatus.textContent = `✅ Found ${lines.length} items! Importing...`;
+                // Prompt user with a review preview before saving
+                const confirmMessage = `Detected ${lines.length} items:\n\n• ${lines.slice(0, 10).join('\n• ')}${lines.length > 10 ? '\n...and more' : ''}\n\nImport these items into your list?`;
+                if (!confirm(confirmMessage)) {
+                    ocrStatus.textContent = "❌ Import cancelled.";
+                    ocrStatus.style.color = "#64748b";
+                    return;
+                }
+
+                ocrStatus.textContent = `✅ Importing ${lines.length} clean items...`;
                 ocrStatus.style.color = "#10b981";
 
                 for (const itemName of lines) {
