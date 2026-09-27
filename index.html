@@ -7,6 +7,8 @@
     <!-- PWA Manifest for Home Screen Installation -->
     <link rel="manifest" href='data:application/manifest+json,{"name":"Visual Shopping List","short_name":"ShoppingList","start_url":".","display":"standalone","background_color":"#f8fafc","theme_color":"#2563eb","icons":[{"src":"https://images.unsplash.com/photo-1542838132-92c53300491e?w=192&q=80","sizes":"192x192","type":"image/jpeg"}]}'>
     <meta name="theme-color" content="#2563eb">
+    <!-- Tesseract OCR Library for Written List Import -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v5/dist/tesseract.min.js"></script>
     <style>
         :root { --primary: #2563eb; --bg: #f8fafc; --surface: #ffffff; }
         
@@ -165,7 +167,7 @@
         .admin-form { display: flex; flex-direction: column; gap: 12px; }
         .admin-form input, .admin-form select { padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1rem; background: white; width: 100%; box-sizing: border-box; }
         .camera-btn { background: #6366f1; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; text-align: center; display: block; }
-        #camera-input { display: none; }
+        #camera-input, #ocr-list-input { display: none; }
 
         /* ====== CALENDAR WIDGET ====== */
         .calendar-section { border-top: 2px dashed #cbd5e1; padding-top: 15px; display: flex; flex-direction: column; gap: 8px; margin-top: 15px; }
@@ -250,6 +252,15 @@
                     <input type="file" id="camera-input" accept="image/*">
 
                     <button class="full-width-btn" id="add-inventory-btn" style="margin-top: 0;">Save to Inventory</button>
+                </div>
+
+                <!-- Separate Option: Written List OCR Import -->
+                <div style="border-top: 2px dashed #cbd5e1; padding-top: 15px; margin-top: 15px;">
+                    <h3 style="margin-top:0; font-size:1rem; color:#1e293b;">📝 Import Written List</h3>
+                    <p style="font-size:0.85rem; color:#64748b; margin-bottom:10px;">Upload a photo of a written shopping list to auto-populate items.</p>
+                    <label for="ocr-list-input" class="camera-btn" style="background: #10b981;">📄 Upload Written List Photo</label>
+                    <input type="file" id="ocr-list-input" accept="image/*">
+                    <div id="ocr-status" style="font-size: 0.85rem; color: #64748b; margin-top: 8px; font-weight: 600;"></div>
                 </div>
 
                 <!-- Calendar Widget -->
@@ -714,6 +725,7 @@
             }
         }
 
+        // ====== ORIGINAL ITEM CAMERA UPLOADER (UNTOUCHED) ======
         const cameraInput = document.getElementById('camera-input');
         const imageInputUrl = document.getElementById('new-image');
         cameraInput.onchange = (e) => {
@@ -738,6 +750,70 @@
                 img.src = uploadEvent.target.result;
             };
             reader.readAsDataURL(file);
+        };
+
+        // ====== NEW: WRITTEN LIST OCR IMPORT PIPELINE ======
+        const ocrInput = document.getElementById('ocr-list-input');
+        const ocrStatus = document.getElementById('ocr-status');
+
+        ocrInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            ocrStatus.textContent = "🔄 Scanning list with OCR...";
+            ocrStatus.style.color = "#2563eb";
+
+            try {
+                const worker = await Tesseract.createWorker('eng');
+                const ret = await worker.recognize(file);
+                await worker.terminate();
+
+                const rawText = ret.data.text;
+                if (!rawText || !rawText.trim()) {
+                    ocrStatus.textContent = "⚠️ No text detected. Try a clearer photo.";
+                    ocrStatus.style.color = "#ef4444";
+                    return;
+                }
+
+                // Clean and split lines
+                const lines = rawText.split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0)
+                    .map(line => line.replace(/^[\d\-\*\•\.\)]+\s*/, '').trim())
+                    .filter(line => line.length > 1);
+
+                if (lines.length === 0) {
+                    ocrStatus.textContent = "⚠️ Could not extract valid items from image.";
+                    ocrStatus.style.color = "#ef4444";
+                    return;
+                }
+
+                ocrStatus.textContent = `✅ Found ${lines.length} items! Importing...`;
+                ocrStatus.style.color = "#10b981";
+
+                for (const itemName of lines) {
+                    await addDoc(collection(db, currentListId), {
+                        name: itemName,
+                        aisle: '',
+                        price: '',
+                        image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&q=80',
+                        store: currentStore || 'Other',
+                        addedAt: Date.now(),
+                        inCart: false
+                    });
+                }
+
+                setTimeout(() => {
+                    ocrStatus.textContent = "";
+                    ocrInput.value = "";
+                    document.querySelector('[data-target="view-list"]').click();
+                }, 1200);
+
+            } catch (err) {
+                console.error(err);
+                ocrStatus.textContent = "❌ OCR error. Please try again.";
+                ocrStatus.style.color = "#ef4444";
+            }
         };
 
         document.getElementById('add-inventory-btn').onclick = async () => {
