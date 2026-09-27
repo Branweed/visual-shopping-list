@@ -7,8 +7,6 @@
     <!-- PWA Manifest for Home Screen Installation -->
     <link rel="manifest" href='data:application/manifest+json,{"name":"Visual Shopping List","short_name":"ShoppingList","start_url":".","display":"standalone","background_color":"#f8fafc","theme_color":"#2563eb","icons":[{"src":"https://images.unsplash.com/photo-1542838132-92c53300491e?w=192&q=80","sizes":"192x192","type":"image/jpeg"}]}'>
     <meta name="theme-color" content="#2563eb">
-    <!-- Tesseract OCR Library for Written List Import -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v5/dist/tesseract.min.js"></script>
     <style>
         :root { --primary: #2563eb; --bg: #f8fafc; --surface: #ffffff; }
         
@@ -254,9 +252,9 @@
                     <button class="full-width-btn" id="add-inventory-btn" style="margin-top: 0;">Save to Inventory</button>
                 </div>
 
-                <!-- Separate Option: Written List OCR Import -->
+                <!-- Separate Option: Written List Gemini AI Scan -->
                 <div style="border-top: 2px dashed #cbd5e1; padding-top: 15px; margin-top: 15px;">
-                    <h3 style="margin-top:0; font-size:1rem; color:#1e293b;">📝 Import Written List</h3>
+                    <h3 style="margin-top:0; font-size:1rem; color:#1e293b;">📝 Import Written List (Gemini AI)</h3>
                     <p style="font-size:0.85rem; color:#64748b; margin-bottom:10px;">Upload a photo of a written shopping list to auto-populate items.</p>
                     <label for="ocr-list-input" class="camera-btn" style="background: #10b981;">📄 Upload Written List Photo</label>
                     <input type="file" id="ocr-list-input" accept="image/*">
@@ -752,7 +750,37 @@
             reader.readAsDataURL(file);
         };
 
-        // ====== UPDATED: WRITTEN LIST OCR IMPORT WITH STRICT FILTERING & PREVIEW ======
+        // ====== GEMINI AI HANDWRITTEN LIST SCANNER ======
+        async function scanHandwrittenList(base64Image) {
+            const apiKey = "AQ.Ab8RN6KxqAyx76ayxRcK2yZgRjN6WRYfIMUpWXxuY--m2DpxGA";
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: "Analyze this handwritten shopping list image. Extract all the item names accurately, correct any spelling typos, and return them as a clean list separated by newlines." },
+                        {
+                            inline_data: {
+                                mime_type: "image/jpeg",
+                                data: base64Image
+                            }
+                        }
+                    ]
+                }]
+            };
+
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            
+            const data = await response.json();
+            const extractedText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            
+            return extractedText.split(/\r?\n/).map(item => item.replace(/^[*-]\s*/, '').trim()).filter(Boolean);
+        }
+
         const ocrInput = document.getElementById('ocr-list-input');
         const ocrStatus = document.getElementById('ocr-status');
 
@@ -760,74 +788,49 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            ocrStatus.textContent = "🔄 Scanning list with OCR...";
+            ocrStatus.textContent = "🔄 Scanning list with Gemini AI...";
             ocrStatus.style.color = "#2563eb";
 
-            try {
-                const worker = await Tesseract.createWorker('eng');
-                const ret = await worker.recognize(file);
-                await worker.terminate();
+            const reader = new FileReader();
+            reader.onload = async (uploadEvent) => {
+                try {
+                    const base64String = uploadEvent.target.result.split(',')[1];
+                    const items = await scanHandwrittenList(base64String);
 
-                const rawText = ret.data.text;
-                if (!rawText || !rawText.trim()) {
-                    ocrStatus.textContent = "⚠️ No text detected. Try a clearer photo.";
+                    if (items.length === 0) {
+                        ocrStatus.textContent = "⚠️ No items detected. Try a clearer photo.";
+                        ocrStatus.style.color = "#ef4444";
+                        return;
+                    }
+
+                    ocrStatus.textContent = `✅ Importing ${items.length} items...`;
+                    ocrStatus.style.color = "#10b981";
+
+                    for (const itemName of items) {
+                        await addDoc(collection(db, currentListId), {
+                            name: itemName,
+                            aisle: '',
+                            price: '',
+                            image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&q=80',
+                            store: currentStore || 'Other',
+                            addedAt: Date.now(),
+                            inCart: false
+                        });
+                    }
+
+                    setTimeout(() => {
+                        ocrStatus.textContent = "";
+                        ocrInput.value = "";
+                        document.querySelector('[data-target="view-list"]').click();
+                    }, 1200);
+
+                } catch (err) {
+                    console.error(err);
+                    ocrStatus.textContent = "❌ AI scanning error. Please try again.";
                     ocrStatus.style.color = "#ef4444";
-                    return;
                 }
-
-                // Strict filtering to remove OCR handwriting noise & gibberish
-                const lines = rawText.split('\n')
-                    .map(line => line.trim())
-                    .filter(line => {
-                        // Drop lines that are too short/long or lack actual alphabetic characters
-                        if (line.length < 2 || line.length > 40) return false;
-                        const alphaCount = (line.match(/[a-zA-Z]/g) || []).length;
-                        if (alphaCount < 2) return false; 
-                        return true;
-                    })
-                    .map(line => line.replace(/^[\d\-\*\•\.\)]+\s*/, '').trim())
-                    .filter(line => line.length > 1);
-
-                if (lines.length === 0) {
-                    ocrStatus.textContent = "⚠️ Could not extract valid items. Try better lighting.";
-                    ocrStatus.style.color = "#ef4444";
-                    return;
-                }
-
-                // Prompt user with a review preview before saving
-                const confirmMessage = `Detected ${lines.length} items:\n\n• ${lines.slice(0, 10).join('\n• ')}${lines.length > 10 ? '\n...and more' : ''}\n\nImport these items into your list?`;
-                if (!confirm(confirmMessage)) {
-                    ocrStatus.textContent = "❌ Import cancelled.";
-                    ocrStatus.style.color = "#64748b";
-                    return;
-                }
-
-                ocrStatus.textContent = `✅ Importing ${lines.length} clean items...`;
-                ocrStatus.style.color = "#10b981";
-
-                for (const itemName of lines) {
-                    await addDoc(collection(db, currentListId), {
-                        name: itemName,
-                        aisle: '',
-                        price: '',
-                        image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&q=80',
-                        store: currentStore || 'Other',
-                        addedAt: Date.now(),
-                        inCart: false
-                    });
-                }
-
-                setTimeout(() => {
-                    ocrStatus.textContent = "";
-                    ocrInput.value = "";
-                    document.querySelector('[data-target="view-list"]').click();
-                }, 1200);
-
-            } catch (err) {
-                console.error(err);
-                ocrStatus.textContent = "❌ OCR error. Please try again.";
-                ocrStatus.style.color = "#ef4444";
-            }
+            };
+            reader.readAsDataURL(file);
         };
 
         document.getElementById('add-inventory-btn').onclick = async () => {
