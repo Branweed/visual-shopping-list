@@ -2,7 +2,7 @@
 const GEMINI_API_KEY = "AQ.Ab8RN6KxqAyx76ayxRcK2yZgRjN6WRYfIMUpWXxuY--m2DpxGA";
 
 async function callGeminiAPI(promptText) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
     
     try {
         const response = await fetch(url, {
@@ -18,9 +18,16 @@ async function callGeminiAPI(promptText) {
         });
 
         const data = await response.json();
+
+        // Check if the server returned an error code
+        if (!response.ok) {
+            console.error("Gemini API Error Response:", data);
+            return `Error: ${data.error?.message || response.statusText}`;
+        }
+
         return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
     } catch (error) {
-        console.error("Error calling Gemini API:", error);
+        console.error("Network or Parsing Error:", error);
         return null;
     }
 }
