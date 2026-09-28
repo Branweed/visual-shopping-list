@@ -6,7 +6,980 @@
     <title>Visual Shopping List</title>
     <!-- PWA Manifest for Home Screen Installation -->
     <link rel="manifest" href='data:application/manifest+json,{"name":"Visual Shopping List","short_name":"ShoppingList","start_url":".","display":"standalone","background_color":"#f8fafc","theme_color":"#2563eb","icons":[{"src":"https://images.unsplash.com/photo-1542838132-92c53300491e?w=192&q=80","sizes":"192x192","type":"image/jpeg"}]}'>
+    <meta name="theme-color" content="#2563eb"><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Shopping List</title>
+    <!-- PWA Manifest for Home Screen Installation -->
+    <link rel="manifest" href='data:application/manifest+json,{"name":"Visual Shopping List","short_name":"ShoppingList","start_url":".","display":"standalone","background_color":"#f8fafc","theme_color":"#2563eb","icons":[{"src":"https://images.unsplash.com/photo-1542838132-92c53300491e?w=192&q=80","sizes":"192x192","type":"image/jpeg"}]}'>
     <meta name="theme-color" content="#2563eb">
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; --surface: #ffffff; }
+        
+        body { 
+            font-family: system-ui, -apple-system, sans-serif; 
+            background: var(--bg); 
+            margin: 0; 
+            box-sizing: border-box; 
+            overflow: hidden; 
+        }
+
+        *, *::before, *::after { box-sizing: border-box; }
+        
+        h2 { margin-top: 0; margin-bottom: 10px; color: #1e293b; font-size: 1.1rem; }
+
+        /* ====== MOBILE HEADER ====== */
+        #mobile-header {
+            display: flex; align-items: center; justify-content: space-between;
+            background: var(--primary); color: white;
+            height: 55px; padding: 0 15px; position: relative;
+            box-shadow: 0 2px 4px rgb(0 0 0 / 0.1);
+            z-index: 100;
+        }
+        #mobile-header-title { font-weight: 700; font-size: 1.1rem; }
+        .header-share-btn { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 10px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.8rem; }
+
+        /* ====== LAYOUT CONTAINERS ====== */
+        #app-container {
+            position: relative; width: 100vw; height: calc(100vh - 55px - 60px); overflow: hidden;
+        }
+        
+        .panel { 
+            background: var(--surface); padding: 15px; 
+            display: flex; flex-direction: column; overflow-y: auto; 
+        }
+
+        /* ====== MOBILE TAB LOGIC ====== */
+        .mobile-view {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; background: var(--bg); z-index: 1; padding: 0; 
+        }
+        .mobile-view.active { display: flex; z-index: 10; }
+        .panel-content { padding: 15px; padding-bottom: 20px; flex-grow: 1; overflow-y: auto; } 
+
+        /* ====== MOBILE BOTTOM NAV BAR ====== */
+        #mobile-bottom-nav {
+            display: flex; height: 60px; background: white; border-top: 1px solid #e2e8f0;
+            position: fixed; bottom: 0; left: 0; width: 100%; z-index: 100;
+        }
+        .nav-tab-btn {
+            flex: 1; background: transparent; border: none; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600;
+            color: #64748b; cursor: pointer; gap: 2px;
+        }
+        .nav-tab-btn span.icon { font-size: 1.2rem; }
+        .nav-tab-btn.active { color: var(--primary); }
+
+        /* ====== DESKTOP SPECIFIC OVERRIDES ====== */
+        @media (min-width: 769px) {
+            #mobile-header, #mobile-bottom-nav { display: none !important; }
+            #app-container {
+                display: grid; grid-template-columns: 1fr 280px; grid-template-rows: 1fr 1fr; 
+                gap: 15px; height: 100vh; padding: 15px; margin: 0 auto; max-width: 1000px;
+            }
+            .panel { border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); padding: 12px; display: flex !important; }
+            .mobile-view { position: static !important; display: flex !important; height: auto; background: var(--surface); }
+            .panel-content { padding: 0; }
+            
+            #view-stores { display: none !important; }
+
+            #view-list { grid-column: 1; grid-row: 1; }
+            #view-inventory { grid-column: 1; grid-row: 2; }
+            #view-admin { 
+                grid-column: 2; grid-row: 1 / span 2; 
+                border: 2px dashed #cbd5e1; background: #f8fafc;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .desktop-only { display: none !important; }
+        }
+
+        /* ====== QUICK-ADD BAR ====== */
+        .quick-add-container {
+            display: flex; gap: 8px; margin-bottom: 12px;
+        }
+        .quick-add-input {
+            flex-grow: 1; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px;
+            font-size: 0.95rem; outline: none; background: #fff;
+        }
+        .quick-add-input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,0.2); }
+        .quick-add-btn {
+            background: var(--primary); color: white; border: none; padding: 0 16px;
+            border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; white-space: nowrap;
+        }
+
+        /* ====== LIST SELECTOR BAR ====== */
+        .list-selector-bar {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px;
+        }
+        .list-tab {
+            background: #e2e8f0; border: none; padding: 6px 12px; border-radius: 20px; font-weight: 600; font-size: 0.85rem; cursor: pointer; white-space: nowrap; color: #475569;
+        }
+        .list-tab.active { background: var(--primary); color: white; }
+        .list-tab-action { background: #f1f5f9; border: 1px dashed #cbd5e1; color: #0f172a; }
+
+        /* ====== STORE SELECTION UI ====== */
+        .store-selector { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; }
+        .store-bubble { background: #f1f5f9; border: 1px solid #e2e8f0; padding: 6px 12px; border-radius: 20px; cursor: pointer; font-weight: 600; font-size: 0.85rem; color: #64748b; white-space: nowrap; }
+        .store-bubble.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        .mobile-store-row {
+            display: flex; align-items: center; justify-content: space-between; padding: 14px 16px;
+            border-bottom: 1px solid #e2e8f0; background: white;
+            font-size: 1rem; font-weight: 600; color: #1e293b; cursor: pointer;
+        }
+        .mobile-store-row:active { background: #f1f5f9; }
+
+        /* ====== INVENTORY UI ====== */
+        .search-bar-container { margin-bottom: 15px; }
+        .search-bar-container input {
+            width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;
+            font-size: 1rem; outline: none; background: #fff;
+        }
+        .search-bar-container input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,0.2); }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 10px; overflow-y: auto; padding-bottom: 10px; }
+        @media (max-width: 768px) { .grid { grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); gap: 10px; } }
+        .item-card { border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; text-align: center; padding: 8px; position: relative; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .item-card:active { transform: scale(0.95); }
+        .item-card img { width: 100%; height: 65px; object-fit: cover; border-radius: 6px; margin-bottom: 6px; }
+        .item-card .name { font-weight: 600; font-size: 0.85rem; line-height: 1.2; }
+        .item-card .inventory-aisle { font-size: 0.7rem; color: #64748b; margin-top: 4px; }
+        
+        .delete-inventory-btn { position: absolute; top: 4px; right: 4px; background: rgba(239, 68, 68, 0.9); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .edit-inventory-btn { position: absolute; top: 4px; left: 4px; background: rgba(59, 130, 246, 0.9); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+        /* ====== SHOPPING LIST UI ====== */
+        #shopping-list { overflow-y: auto; flex-grow: 1; padding-right: 5px; }
+        .store-header { font-size: 1.05rem; color: var(--primary); margin: 15px 0 8px 0; padding-bottom: 4px; border-bottom: 2px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
+        .store-header:first-child { margin-top: 0; }
+        .list-item { display: flex; align-items: center; padding: 12px 8px; border-bottom: 1px solid #f1f5f9; gap: 12px; }
+        .list-item img { width: 45px; height: 45px; object-fit: cover; border-radius: 8px; }
+        .list-item-details { flex-grow: 1; }
+        .list-item-name { font-weight: 600; margin: 0; font-size: 1rem; }
+        .list-item-aisle { font-size: 0.8rem; color: #64748b; margin: 3px 0 0 0; }
+        .list-checkbox { transform: scale(1.4); cursor: pointer; margin-right: 4px; width: 20px; height: 20px; }
+        .in-cart { background-color: #f8fafc; }
+        .in-cart img { opacity: 0.4; filter: grayscale(100%); }
+        .in-cart .list-item-name { text-decoration: line-through; color: #94a3b8; }
+        .remove-btn { background: #ef4444; color: white; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.8rem; font-weight: bold; }
+
+        /* ====== BUTTONS & FORMS ====== */
+        .full-width-btn { width: 100%; background: #10b981; color: white; border: none; padding: 14px; border-radius: 8px; font-weight: 700; font-size: 1rem; margin-top: 15px; cursor: pointer; }
+        
+        .admin-form { display: flex; flex-direction: column; gap: 12px; }
+        .admin-form input, .admin-form select { padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1rem; background: white; width: 100%; box-sizing: border-box; }
+        .camera-btn { background: #6366f1; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; text-align: center; display: block; }
+        #camera-input, #ocr-list-input { display: none; }
+
+        /* ====== CALENDAR WIDGET ====== */
+        .calendar-section { border-top: 2px dashed #cbd5e1; padding-top: 15px; display: flex; flex-direction: column; gap: 8px; margin-top: 15px; }
+        .cal-header-row { display: flex; justify-content: space-between; align-items: center; }
+        .cal-header-row span { font-weight: 700; color: #334155; }
+        .cal-nav-btn { background: #e2e8f0; border: none; border-radius: 4px; width: 30px; height: 30px; font-weight: bold; cursor: pointer; }
+        .single-month-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; font-size: 0.85rem; }
+        .single-days-grid { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; gap: 2px; }
+        .cal-day-name { font-weight: 600; color: #94a3b8; font-size: 0.75rem; padding-bottom: 4px; }
+        .cal-day { padding: 8px 0; border-radius: 4px; color: #334155; cursor: pointer; position: relative; }
+        .cal-day.today { background: #dbeafe; color: #1d4ed8; font-weight: 700; }
+        .cal-day.has-events::after { content: ''; display: block; width: 5px; height: 5px; background: #10b981; border-radius: 50%; margin: 2px auto 0 auto; }
+    </style>
+</head>
+<body>
+
+    <!-- Mobile Header -->
+    <div id="mobile-header" class="mobile-only">
+        <div id="mobile-header-title">My Master List</div>
+        <button class="header-share-btn" id="mobile-share-btn">📤 Share</button>
+    </div>
+
+    <div id="app-container">
+        
+        <!-- TIER 1: MASTER LIST -->
+        <div class="panel mobile-view active" id="view-list">
+            <div class="panel-content" style="display: flex; flex-direction: column; height: 100%;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;" class="desktop-only">
+                    <h2 id="current-list-title-header" style="margin-bottom: 0;">My Master List</h2>
+                    <div style="display: flex; gap: 6px;">
+                        <button id="desktop-share-btn" style="background: #dbeafe; color: #1d4ed8; border:none; border-radius:4px; padding:4px 8px; cursor:pointer; font-size:0.8rem; font-weight:600;">📤 Share List</button>
+                        <button id="desktop-rename-list-btn" style="background: #e2e8f0; border:none; border-radius:4px; padding:4px 8px; cursor:pointer; font-size:0.8rem; font-weight:600;">✏️ Rename</button>
+                        <button id="desktop-delete-list-btn" style="background: #fee2e2; color: #dc2626; border:none; border-radius:4px; padding:4px 8px; cursor:pointer; font-size:0.8rem; font-weight:600;">🗑️ Delete</button>
+                    </div>
+                </div>
+                
+                <!-- List Selection Bar -->
+                <div class="list-selector-bar" id="list-selector-bar"></div>
+
+                <!-- Quick-Add Bar -->
+                <div class="quick-add-container">
+                    <input type="text" id="quick-add-input" class="quick-add-input" placeholder="⚡ Quick add item...">
+                    <button id="quick-add-btn" class="quick-add-btn">Add</button>
+                </div>
+
+                <div id="shopping-list"></div>
+            </div>
+        </div>
+
+        <!-- TIER 2: STORE SELECTION & INVENTORY -->
+        <div class="panel mobile-view" id="view-inventory">
+            <div class="panel-content">
+                <h2 style="margin-bottom: 8px;">Add Items</h2>
+                <div class="store-selector" id="store-selector"></div>
+                <div id="mobile-store-list" class="mobile-only" style="margin-bottom: 15px;"></div>
+
+                <div class="search-bar-container">
+                    <input type="text" id="inventory-search" placeholder="🔍 Type what you are looking for...">
+                </div>
+
+                <div class="grid" id="inventory-grid"></div>
+            </div>
+        </div>
+
+        <!-- TIER 3: ADMIN / CREATE ITEM & CALENDAR -->
+        <div class="panel mobile-view" id="view-admin">
+            <div class="panel-content">
+                <h2 id="admin-header-title">🛠️ Add New Item</h2>
+                <div class="admin-form">
+                    <input type="text" id="new-name" placeholder="Item Name (e.g. Eggs)">
+                    <input type="text" id="new-aisle" placeholder="Aisle (e.g. Dairy or Aisle 4)">
+		            <input type="number" id="new-price" placeholder="Price (e.g. 2.99)" step="0.01">
+                    
+                    <select id="new-store-select">
+                        <option value="">Select Store...</option>
+                        <option value="__ADD_NEW__">➕ Add New Store...</option>
+                    </select>
+
+                    <input type="text" id="new-image" placeholder="Image URL (or photo below)">
+                    
+                    <label for="camera-input" class="camera-btn">📸 Take / Upload Photo</label>
+                    <input type="file" id="camera-input" accept="image/*">
+
+                    <button class="full-width-btn" id="add-inventory-btn" style="margin-top: 0;">Save to Inventory</button>
+                </div>
+
+                <!-- Separate Option: Written List Gemini AI Scan -->
+                <div style="border-top: 2px dashed #cbd5e1; padding-top: 15px; margin-top: 15px;">
+                    <h3 style="margin-top:0; font-size:1rem; color:#1e293b;">📝 Import Written List (Gemini AI)</h3>
+                    <p style="font-size:0.85rem; color:#64748b; margin-bottom:10px;">Upload a photo of a written shopping list to auto-populate items.</p>
+                    <label for="ocr-list-input" class="camera-btn" style="background: #10b981;">📄 Upload Written List Photo</label>
+                    <input type="file" id="ocr-list-input" accept="image/*">
+                    <div id="ocr-status" style="font-size: 0.85rem; color: #64748b; margin-top: 8px; font-weight: 600;"></div>
+                </div>
+
+                <!-- Calendar Widget -->
+                <div class="calendar-section">
+                    <div class="cal-header-row">
+                        <button class="cal-nav-btn" id="prev-month-btn">&#10094;</button>
+                        <span id="calendar-month-title"></span>
+                        <button class="cal-nav-btn" id="next-month-btn">&#10095;</button>
+                    </div>
+                    <div class="single-month-card">
+                        <div class="single-days-grid" id="calendar-days-container"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Bottom Navigation Bar -->
+    <div id="mobile-bottom-nav" class="mobile-only">
+        <button class="nav-tab-btn active" data-target="view-list">
+            <span class="icon">📋</span>
+            <span>List</span>
+        </button>
+        <button class="nav-tab-btn" data-target="view-inventory">
+            <span class="icon">🛒</span>
+            <span>Add Items</span>
+        </button>
+        <button class="nav-tab-btn" data-target="view-admin">
+            <span class="icon">➕</span>
+            <span>Create & Plan</span>
+        </button>
+    </div>
+
+    <!-- Firebase Connection & Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, getDocs, setDoc } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyA66d34aefeb466@70119771657.iam.gserviceaccount.com",
+            authDomain: "ez-list-509201.firebaseapp.com",
+            projectId: "ez-list-509201",
+            storageBucket: "ez-list-509201.firebasestorage.app",
+            messagingSenderId: "70119771657",
+            appId: "1:70119771657:web:ezlistapp"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let stores = {}; 
+        let currentStore = null; 
+        let availableLists = [];
+        let currentListId = "default";
+        let currentListName = "My Master List";
+        let activeList = [];
+        let calendarEvents = [];
+        let capturedImageBase64 = ""; 
+        let searchQuery = ""; 
+        let editingItemId = null; 
+
+        // ====== MOBILE TAB NAVIGATION ======
+        const navTabButtons = document.querySelectorAll('.nav-tab-btn');
+        const views = {
+            'view-list': document.getElementById('view-list'),
+            'view-inventory': document.getElementById('view-inventory'),
+            'view-admin': document.getElementById('view-admin')
+        };
+        const mobileHeaderTitle = document.getElementById('mobile-header-title');
+
+        navTabButtons.forEach(btn => {
+            btn.onclick = () => {
+                const target = btn.getAttribute('data-target');
+                
+                navTabButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                Object.keys(views).forEach(vKey => {
+                    if (vKey === target) {
+                        views[vKey].classList.add('active');
+                    } else {
+                        views[vKey].classList.remove('active');
+                    }
+                });
+
+                if (target === 'view-list') mobileHeaderTitle.textContent = currentListName;
+                if (target === 'view-inventory') mobileHeaderTitle.textContent = currentStore ? `${currentStore} Items` : 'Add Items';
+                if (target === 'view-admin') mobileHeaderTitle.textContent = editingItemId ? 'Edit Item' : 'Create & Plan';
+            };
+        });
+
+        // ====== SHARE / TEXT EXPORT ======
+        async function handleShareList() {
+            const grandTotal = activeList.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
+            let text = `🛒 ${currentListName}\nTotal: $${grandTotal.toFixed(2)}\n\n`;
+
+            const groupedItems = {};
+            activeList.forEach(item => {
+                const storeName = item.store || "Other";
+                if (!groupedItems[storeName]) groupedItems[storeName] = [];
+                groupedItems[storeName].push(item);
+            });
+
+            for (const [storeName, items] of Object.entries(groupedItems)) {
+                items.sort((a, b) => {
+                    const getAisleNumber = (aisleStr) => {
+                        if (!aisleStr) return 999; 
+                        const match = String(aisleStr).match(/(\d+)/);
+                        return match ? parseInt(match[1], 10) : 999;
+                    };
+                    return getAisleNumber(a.aisle) - getAisleNumber(b.aisle);
+                });
+
+                const storeTotal = items.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
+                text += `📍 ${storeName} ($${storeTotal.toFixed(2)}):\n`;
+
+                items.forEach(i => {
+                    const aisleInfo = i.aisle ? ` (Aisle: ${i.aisle})` : '';
+                    text += `  ${i.inCart ? '✅' : '◻️'} ${i.name}${aisleInfo}${i.price ? ' - $' + i.price : ''}\n`;
+                });
+                text += `\n`;
+            }
+
+            if (navigator.share) {
+                try {
+                    await navigator.share({ title: currentListName, text: text.trim() });
+                } catch (e) { /* Cancelled share */ }
+            } else {
+                navigator.clipboard.writeText(text.trim());
+                alert("List copied to clipboard!");
+            }
+        }
+        document.getElementById('mobile-share-btn').onclick = handleShareList;
+        document.getElementById('desktop-share-btn').onclick = handleShareList;
+
+        // ====== QUICK-ADD LOGIC ======
+        const quickAddInput = document.getElementById('quick-add-input');
+        const quickAddBtn = document.getElementById('quick-add-btn');
+
+        async function submitQuickAdd() {
+            const val = quickAddInput.value.trim();
+            if (!val) return;
+            await addDoc(collection(db, currentListId), {
+                name: val,
+                aisle: '',
+                price: '',
+                image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&q=80',
+                store: currentStore || 'Other',
+                addedAt: Date.now(),
+                inCart: false
+            });
+            quickAddInput.value = '';
+        }
+
+        quickAddBtn.onclick = submitQuickAdd;
+        quickAddInput.onkeydown = (e) => { if (e.key === 'Enter') submitQuickAdd(); };
+
+        // ====== MULTI-LIST MANAGEMENT ======
+        const listSelectorBar = document.getElementById('list-selector-bar');
+
+        function renderListTabs() {
+            listSelectorBar.innerHTML = '';
+            
+            availableLists.forEach(l => {
+                const tab = document.createElement('button');
+                tab.className = `list-tab ${l.id === currentListId ? 'active' : ''}`;
+                tab.textContent = l.name;
+                tab.onclick = () => {
+                    currentListId = l.id;
+                    currentListName = l.name;
+                    document.getElementById('current-list-title-header').textContent = currentListName;
+                    if (views['view-list'].classList.contains('active')) mobileHeaderTitle.textContent = currentListName;
+                    subscribeToList(currentListId);
+                    renderListTabs();
+                };
+                listSelectorBar.appendChild(tab);
+            });
+
+            const addTab = document.createElement('button');
+            addTab.className = 'list-tab list-tab-action';
+            addTab.textContent = '＋ New List';
+            addTab.onclick = async () => {
+                const name = prompt("Enter new list name:");
+                if(name && name.trim()) {
+                    const newId = "list_" + Date.now();
+                    await setDoc(doc(db, "listsMeta", newId), { name: name.trim() });
+                    currentListId = newId;
+                    currentListName = name.trim();
+                    subscribeToList(currentListId);
+                }
+            };
+            listSelectorBar.appendChild(addTab);
+        }
+
+        async function renameCurrentList() {
+            const newName = prompt("Rename current list:", currentListName);
+            if(newName && newName.trim()) {
+                currentListName = newName.trim();
+                document.getElementById('current-list-title-header').textContent = currentListName;
+                if (views['view-list'].classList.contains('active')) mobileHeaderTitle.textContent = currentListName;
+                await setDoc(doc(db, "listsMeta", currentListId), { name: currentListName }, { merge: true });
+                renderListTabs();
+            }
+        }
+
+        async function deleteCurrentList() {
+            if(availableLists.length <= 1) {
+                alert("You cannot delete your only list.");
+                return;
+            }
+            if(confirm(`Are you sure you want to delete "${currentListName}" and all its items?`)) {
+                const snap = await getDocs(collection(db, currentListId));
+                for(const d of snap.docs) await deleteDoc(d.ref);
+                await deleteDoc(doc(db, "listsMeta", currentListId));
+                const remaining = availableLists.filter(l => l.id !== currentListId);
+                currentListId = remaining[0].id;
+                currentListName = remaining[0].name;
+                subscribeToList(currentListId);
+            }
+        }
+
+        document.getElementById('desktop-rename-list-btn').onclick = renameCurrentList;
+        document.getElementById('desktop-delete-list-btn').onclick = deleteCurrentList;
+
+        // ====== UI RENDERING & STORE MANAGEMENT ======
+        const inventoryGrid = document.getElementById('inventory-grid');
+        const shoppingListContainer = document.getElementById('shopping-list');
+        const storeSelector = document.getElementById('store-selector');
+        const mobileStoreList = document.getElementById('mobile-store-list');
+        const storeSelect = document.getElementById('new-store-select');
+
+        document.getElementById('inventory-search').addEventListener('input', (e) => {
+            searchQuery = e.target.value.toLowerCase();
+            renderInventory();
+        });
+
+        function renderStoreBubblesAndDropdown() {
+            storeSelector.innerHTML = '';
+            mobileStoreList.innerHTML = '';
+            
+            storeSelect.innerHTML = `
+                <option value="">Select Store...</option>
+                <option value="__ADD_NEW__">➕ Add New Store...</option>
+                <option disabled>──────────</option>
+            `;
+
+            const sortedStores = Object.keys(stores).sort((a, b) => a.localeCompare(b));
+
+            sortedStores.forEach(storeName => {
+                const btn = document.createElement('button');
+                btn.className = `store-bubble ${storeName === currentStore ? 'active' : ''}`;
+                btn.textContent = storeName;
+                btn.onclick = () => { currentStore = storeName; renderStoreBubblesAndDropdown(); renderInventory(); };
+                storeSelector.appendChild(btn);
+
+                const mobileRow = document.createElement('div');
+                mobileRow.className = 'mobile-store-row';
+                mobileRow.style.display = window.innerWidth <= 768 ? 'flex' : 'none';
+                mobileRow.innerHTML = `<div>${storeName}</div><div style="color: #cbd5e1;">&#10095;</div>`;
+                mobileRow.onclick = () => {
+                    currentStore = storeName; storeSelect.value = storeName;
+                    renderStoreBubblesAndDropdown(); renderInventory();
+                };
+                mobileStoreList.appendChild(mobileRow);
+
+                const opt = document.createElement('option');
+                opt.value = storeName; opt.textContent = storeName;
+                storeSelect.appendChild(opt);
+            });
+
+            const addStoreBtn = document.createElement('div');
+            addStoreBtn.className = 'mobile-store-row';
+            addStoreBtn.style.color = '#10b981';
+            addStoreBtn.style.display = window.innerWidth <= 768 ? 'flex' : 'none';
+            addStoreBtn.innerHTML = `<div style="flex-grow: 1; font-weight: 600;">➕ Add New Store</div>`;
+            addStoreBtn.onclick = () => handleStoreDropdownLogic("__ADD_NEW__");
+            mobileStoreList.appendChild(addStoreBtn);
+
+            if (currentStore && stores[currentStore]) {
+                const divider = document.createElement('option'); divider.disabled = true; divider.textContent = '──────────'; storeSelect.appendChild(divider);
+                const editOpt = document.createElement('option'); editOpt.value = `__EDIT_${currentStore}`; editOpt.textContent = `✏️ Edit Store Name`; storeSelect.appendChild(editOpt);
+                const deleteOpt = document.createElement('option'); deleteOpt.value = `__DELETE_${currentStore}`; deleteOpt.textContent = `🗑️ Delete Store: ${currentStore}`; storeSelect.appendChild(deleteOpt);
+                storeSelect.value = currentStore;
+            } else {
+                storeSelect.value = "";
+            }
+        }
+
+        async function handleStoreDropdownLogic(val) {
+            if (val === "__ADD_NEW__") {
+                const newStoreName = prompt("Enter the name of the new store:");
+                if (newStoreName && newStoreName.trim() !== "") {
+                    const cleanedName = newStoreName.trim();
+                    if (!stores[cleanedName]) stores[cleanedName] = [];
+                    currentStore = cleanedName; 
+                    renderStoreBubblesAndDropdown(); 
+                    storeSelect.value = cleanedName;
+                } else storeSelect.value = currentStore || "";
+            } else if (val.startsWith("__EDIT_")) {
+                const storeToEdit = val.replace("__EDIT_", "");
+                const newNameInput = prompt(`Edit store name:`, storeToEdit);
+                if (newNameInput && newNameInput.trim() !== "") {
+                    const updatedName = newNameInput.trim();
+                    
+                    if (updatedName !== storeToEdit) {
+                        const items = stores[storeToEdit] || [];
+                        for (const item of items) await updateDoc(doc(db, "inventory", item.id), { store: updatedName });
+                        
+                        for(const l of availableLists) {
+                            const listSnap = await getDocs(collection(db, l.id));
+                            listSnap.forEach(async (dDoc) => { 
+                                if (dDoc.data().store === storeToEdit) await updateDoc(doc(db, l.id, dDoc.id), { store: updatedName }); 
+                            });
+                        }
+                    }
+                    currentStore = updatedName; 
+                    renderStoreBubblesAndDropdown();
+                } else storeSelect.value = currentStore || "";
+            } else if (val.startsWith("__DELETE_")) {
+                const storeToDelete = val.replace("__DELETE_", "");
+                const itemsInStore = stores[storeToDelete] || [];
+                if (confirm(`Delete "${storeToDelete}" and its ${itemsInStore.length} inventory items?`)) {
+                    for (const item of itemsInStore) await deleteDoc(doc(db, "inventory", item.id));
+                    currentStore = null; storeSelect.value = "";
+                    renderStoreBubblesAndDropdown(); renderInventory();
+                } else storeSelect.value = currentStore || "";
+            } else if (val) {
+                currentStore = val; renderStoreBubblesAndDropdown(); renderInventory();
+            }
+        }
+        storeSelect.onchange = () => handleStoreDropdownLogic(storeSelect.value);
+
+        function renderInventory() {
+            inventoryGrid.innerHTML = '';
+            if (!currentStore || !stores[currentStore]) {
+                inventoryGrid.innerHTML = '<p style="color: #64748b; font-size: 0.9rem;">Select a store above to view items.</p>';
+                return;
+            }
+
+            stores[currentStore].forEach(item => {
+                if (searchQuery) {
+                    const nameMatch = item.name.toLowerCase().includes(searchQuery);
+                    const aisleMatch = (item.aisle || "").toLowerCase().includes(searchQuery);
+                    if (!nameMatch && !aisleMatch) return; 
+                }
+
+                const card = document.createElement('div');
+                card.className = 'item-card';
+                const aisleText = item.aisle ? `<div class="inventory-aisle">Aisle: ${item.aisle}</div>` : '';
+                
+                const parsedPrice = parseFloat(item.price);
+                const priceText = !isNaN(parsedPrice) && parsedPrice > 0 
+                    ? `<div style="color: #10b981; font-weight: bold; font-size: 0.8rem; margin-top: 4px;">$${parsedPrice.toFixed(2)}</div>` 
+                    : '';
+                
+                card.innerHTML = `
+                    <button class="edit-inventory-btn" data-id="${item.id}">✏️</button>
+                    <button class="delete-inventory-btn" data-id="${item.id}">✕</button>
+                    <img src="${item.image}" alt="${item.name}">
+                    <div class="name">${item.name}</div>
+                    ${aisleText} 
+                    ${priceText}
+                `;
+                
+                card.onclick = async (e) => {
+                    if (e.target.classList.contains('delete-inventory-btn') || e.target.classList.contains('edit-inventory-btn')) return; 
+                    
+                    await addDoc(collection(db, currentListId), {
+                        name: item.name, aisle: item.aisle || '', price: item.price || '', image: item.image,
+                        store: currentStore, addedAt: Date.now(), inCart: false 
+                    });
+                    card.style.border = "2px solid #10b981";
+                    setTimeout(() => card.style.border = "1px solid #e2e8f0", 500);
+                };
+
+                card.querySelector('.delete-inventory-btn').onclick = async () => {
+                    if(confirm(`Delete ${item.name} from database?`)) await deleteDoc(doc(db, "inventory", item.id));
+                };
+
+                card.querySelector('.edit-inventory-btn').onclick = () => {
+                    editingItemId = item.id;
+                    document.getElementById('new-name').value = item.name || '';
+                    document.getElementById('new-aisle').value = item.aisle || '';
+                    document.getElementById('new-price').value = item.price || '';
+                    document.getElementById('new-image').value = item.image || '';
+                    storeSelect.value = item.store || '';
+                    
+                    document.getElementById('admin-header-title').innerHTML = "✏️ Edit Item";
+                    document.getElementById('add-inventory-btn').textContent = "Update Item";
+                    
+                    document.querySelector('[data-target="view-admin"]').click();
+                };
+
+                inventoryGrid.appendChild(card);
+            });
+        }
+
+        function renderList() {
+            shoppingListContainer.innerHTML = '';
+            if (activeList.length === 0) {
+                shoppingListContainer.innerHTML = '<p style="color: #64748b; font-size: 1rem;">Your list is empty. Add some items!</p>';
+                return;
+            }
+
+            const grandTotal = activeList.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
+            
+            const grandTotalDiv = document.createElement('div');
+            grandTotalDiv.style.cssText = "display: flex; justify-content: space-between; background: #e0f2fe; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; font-weight: bold; font-size: 1.1rem; color: #1e293b;";
+            grandTotalDiv.innerHTML = `<span>Grand Total</span> <span style="color: #10b981;">$${grandTotal.toFixed(2)}</span>`;
+            shoppingListContainer.appendChild(grandTotalDiv);
+
+            const groupedItems = {};
+            activeList.forEach(item => {
+                const storeName = item.store || "Other";
+                if (!groupedItems[storeName]) groupedItems[storeName] = [];
+                groupedItems[storeName].push(item);
+            });
+
+            for (const [storeName, items] of Object.entries(groupedItems)) {
+                
+                items.sort((a, b) => {
+                    const getAisleNumber = (aisleStr) => {
+                        if (!aisleStr) return 999; 
+                        const match = String(aisleStr).match(/(\d+)/);
+                        return match ? parseInt(match[1], 10) : 999;
+                    };
+                    return getAisleNumber(a.aisle) - getAisleNumber(b.aisle);
+                });
+
+                const storeTotal = items.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
+                const storeTotalHtml = `<span style="font-size: 0.95rem; color: #10b981; font-weight: bold;">$${storeTotal.toFixed(2)}</span>`;
+
+                const header = document.createElement('h3');
+                header.className = 'store-header';
+                header.innerHTML = `<span>${storeName}</span> ${storeTotalHtml}`;
+                shoppingListContainer.appendChild(header);
+
+                items.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = `list-item ${item.inCart ? 'in-cart' : ''}`;
+                    const aisleText = item.aisle ? `Aisle: ${item.aisle}` : '';
+                    
+                    const parsedPrice = parseFloat(item.price);
+                    const priceText = !isNaN(parsedPrice) && parsedPrice > 0 
+                        ? `<span style="color: #10b981; font-weight: bold; margin-left: 8px;">$${parsedPrice.toFixed(2)}</span>` 
+                        : '';
+
+                    div.innerHTML = `
+                        <input type="checkbox" class="list-checkbox" data-id="${item.id}" ${item.inCart ? 'checked' : ''}>
+                        <img src="${item.image}" alt="${item.name}">
+                        <div class="list-item-details">
+                            <p class="list-item-name">${item.name}</p>
+                            <p class="list-item-aisle">${aisleText} ${priceText}</p>
+                        </div>
+                        <button class="remove-btn" data-id="${item.id}">✕</button>
+                    `;
+
+                    div.querySelector('.list-checkbox').onchange = async (e) => await updateDoc(doc(db, currentListId, item.id), { inCart: e.target.checked });
+                    div.querySelector('.remove-btn').onclick = async () => await deleteDoc(doc(db, currentListId, item.id));
+                    shoppingListContainer.appendChild(div);
+                });
+            }
+        }
+
+        // ====== ORIGINAL ITEM CAMERA UPLOADER (UNTOUCHED) ======
+        const cameraInput = document.getElementById('camera-input');
+        const imageInputUrl = document.getElementById('new-image');
+        cameraInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (uploadEvent) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const maxSize = 300;
+                    let width = img.width, height = img.height;
+                    if (width > height) { if (width > maxSize) { height *= maxSize / width; width = maxSize; } } 
+                    else { if (height > maxSize) { width *= maxSize / height; height = maxSize; } }
+                    canvas.width = width; canvas.height = height;
+                    ctx.drawImage(img, 0, 0, width, height);
+                    capturedImageBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                    imageInputUrl.value = "📸 Photo loaded successfully!";
+                    imageInputUrl.style.color = "#10b981";
+                };
+                img.src = uploadEvent.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+
+        // ====== GEMINI AI HANDWRITTEN LIST SCANNER ======
+        async function scanHandwrittenList(base64Image) {
+            const apiKey = "AQ.Ab8RN6IJnVOA7AyLpZX39S01xJei_cPxu0HMNmws0uumzoSdcQ";
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: "Analyze this handwritten shopping list image. Extract all the item names accurately, correct any spelling typos, and return them as a clean list separated by newlines." },
+                        {
+                            inline_data: {
+                                mime_type: "image/jpeg",
+                                data: base64Image
+                            }
+                        }
+                    ]
+                }]
+            };
+
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            
+            const data = await response.json();
+            const extractedText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            
+            return extractedText.split(/\r?\n/).map(item => item.replace(/^[*-]\s*/, '').trim()).filter(Boolean);
+        }
+
+        const ocrInput = document.getElementById('ocr-list-input');
+        const ocrStatus = document.getElementById('ocr-status');
+
+        ocrInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            ocrStatus.textContent = "🔄 Scanning list with Gemini AI...";
+            ocrStatus.style.color = "#2563eb";
+
+            const reader = new FileReader();
+            reader.onload = async (uploadEvent) => {
+                try {
+                    const base64String = uploadEvent.target.result.split(',')[1];
+                    const items = await scanHandwrittenList(base64String);
+
+                    if (items.length === 0) {
+                        ocrStatus.textContent = "⚠️ No items detected. Try a clearer photo.";
+                        ocrStatus.style.color = "#ef4444";
+                        return;
+                    }
+
+                    ocrStatus.textContent = `✅ Importing ${items.length} items...`;
+                    ocrStatus.style.color = "#10b981";
+
+                    for (const itemName of items) {
+                        await addDoc(collection(db, currentListId), {
+                            name: itemName,
+                            aisle: '',
+                            price: '',
+                            image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&q=80',
+                            store: currentStore || 'Other',
+                            addedAt: Date.now(),
+                            inCart: false
+                        });
+                    }
+
+                    setTimeout(() => {
+                        ocrStatus.textContent = "";
+                        ocrInput.value = "";
+                        document.querySelector('[data-target="view-list"]').click();
+                    }, 1200);
+
+                } catch (err) {
+                    console.error(err);
+                    ocrStatus.textContent = "❌ AI scanning error. Please try again.";
+                    ocrStatus.style.color = "#ef4444";
+                }
+            };
+            reader.readAsDataURL(file);
+        };
+
+        document.getElementById('add-inventory-btn').onclick = async () => {
+            const nameInput = document.getElementById('new-name');
+            const aisleInput = document.getElementById('new-aisle');
+            const priceInput = document.getElementById('new-price');
+            const store = storeSelect.value;
+            const name = nameInput.value.trim();
+            
+            if (!name || !store || store === "__ADD_NEW__" || store.startsWith("__")) return alert("Name and valid Store required!");
+            
+            let image = capturedImageBase64 || imageInputUrl.value.trim();
+            if (!image || image.includes("Photo loaded")) image = "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&q=80";
+
+            try {
+                if (editingItemId) {
+                    await updateDoc(doc(db, "inventory", editingItemId), {
+                        name: name,
+                        aisle: aisleInput.value.trim(),
+                        price: priceInput.value.trim(),
+                        store: store,
+                        image: image
+                    });
+                    editingItemId = null;
+                    document.getElementById('admin-header-title').innerHTML = "🛠️ Add New Item";
+                    document.getElementById('add-inventory-btn').textContent = "Save to Inventory";
+                } else {
+                    await addDoc(collection(db, "inventory"), { 
+                        name: name, 
+                        aisle: aisleInput.value.trim(), 
+                        price: priceInput.value.trim(), 
+                        store: store, 
+                        image: image, 
+                        createdAt: Date.now() 
+                    });
+                }
+                
+                nameInput.value = ''; 
+                aisleInput.value = ''; 
+                priceInput.value = '';
+                imageInputUrl.value = ''; 
+                imageInputUrl.style.color = "inherit"; 
+                capturedImageBase64 = ""; 
+                cameraInput.value = ""; 
+                
+                document.querySelector('[data-target="view-list"]').click();
+            } catch (e) { alert("Could not save item."); }
+        };
+
+        // ====== FIREBASE LISTENERS ======
+        onSnapshot(collection(db, "inventory"), (snapshot) => {
+            stores = {}; 
+            snapshot.forEach((doc) => {
+                const item = { ...doc.data(), id: doc.id };
+                if (!stores[item.store]) stores[item.store] = [];
+                stores[item.store].push(item);
+            });
+            ["Aldi", "BJ's", "Market Basket", "Wal-Mart"].forEach(defaultStore => { if (!stores[defaultStore]) stores[defaultStore] = []; });
+            if (currentStore && !stores[currentStore]) currentStore = null;
+            if (Object.keys(stores).length > 0 && !currentStore) currentStore = Object.keys(stores).sort()[0];
+            
+            renderStoreBubblesAndDropdown(); renderInventory();
+        });
+
+        let unsubList = null;
+        function subscribeToList(listId) {
+            if (unsubList) unsubList();
+            unsubList = onSnapshot(collection(db, listId), (snapshot) => {
+                activeList = [];
+                snapshot.forEach((doc) => activeList.push({ ...doc.data(), id: doc.id }));
+                activeList.sort((a, b) => a.addedAt - b.addedAt);
+                renderList();
+            });
+        }
+
+        onSnapshot(collection(db, "listsMeta"), async (snapshot) => {
+            availableLists = [];
+            snapshot.forEach(docSnap => {
+                availableLists.push({ id: docSnap.id, ...docSnap.data() });
+            });
+
+            if (availableLists.length === 0) {
+                await setDoc(doc(db, "listsMeta", "default"), { name: "My Master List" });
+                return;
+            }
+
+            if (!availableLists.some(l => l.id === currentListId)) {
+                currentListId = availableLists[0].id;
+                currentListName = availableLists[0].name;
+            } else {
+                const found = availableLists.find(l => l.id === currentListId);
+                if (found) currentListName = found.name;
+            }
+
+            document.getElementById('current-list-title-header').textContent = currentListName;
+            if (views['view-list'].classList.contains('active')) mobileHeaderTitle.textContent = currentListName;
+            renderListTabs();
+            subscribeToList(currentListId);
+        });
+
+        let displayDate = new Date();
+        const fullMonthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        
+        function renderMonthlyCalendar() {
+            const container = document.getElementById('calendar-days-container');
+            document.getElementById('calendar-month-title').textContent = `${fullMonthNames[displayDate.getMonth()]} ${displayDate.getFullYear()}`;
+            container.innerHTML = '';
+            ["Su","Mo","Tu","We","Th","Fr","Sa"].forEach(d => {
+                const el = document.createElement('div'); el.className = 'cal-day-name'; el.textContent = d; container.appendChild(el);
+            });
+            const firstDay = new Date(displayDate.getFullYear(), displayDate.getMonth(), 1).getDay();
+            const totalDays = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 0).getDate();
+            for (let i=0; i<firstDay; i++) container.appendChild(document.createElement('div'));
+            
+            for (let day=1; day<=totalDays; day++) {
+                const cell = document.createElement('div'); cell.className = 'cal-day'; cell.textContent = day;
+                const dateKey = `${displayDate.getFullYear()}-${String(displayDate.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                if(new Date().toDateString() === new Date(displayDate.getFullYear(), displayDate.getMonth(), day).toDateString()) cell.classList.add('today');
+                if(calendarEvents.some(ev => ev.date === dateKey)) cell.classList.add('has-events');
+                
+                cell.onclick = () => {
+                    const title = prompt(`Add event for ${fullMonthNames[displayDate.getMonth()]} ${day}:`);
+                    if(title) addDoc(collection(db, "calendarEvents"), { title: title.trim(), date: dateKey, createdAt: Date.now() });
+                };
+                container.appendChild(cell);
+            }
+        }
+        
+        document.getElementById('prev-month-btn').onclick = () => { displayDate.setMonth(displayDate.getMonth()-1); renderMonthlyCalendar(); };
+        document.getElementById('next-month-btn').onclick = () => { displayDate.setMonth(displayDate.getMonth()+1); renderMonthlyCalendar(); };
+        
+        onSnapshot(collection(db, "calendarEvents"), (snapshot) => {
+            calendarEvents = []; 
+            snapshot.forEach(doc => calendarEvents.push({...doc.data(), id: doc.id})); 
+            renderMonthlyCalendar();
+        });
+        
+        renderMonthlyCalendar();
+    </script>
+</body>
+</html>
     <style>
         :root { --primary: #2563eb; --bg: #f8fafc; --surface: #ffffff; }
         
