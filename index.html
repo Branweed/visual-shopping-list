@@ -3,76 +3,268 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visual Shopping List</title>
+    <title>Visual Shopping List with Gemini AI</title>
     <style>
+        :root {
+            --primary-color: #1a73e8;
+            --primary-hover: #1557b0;
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-color: #333333;
+            --border-color: #dadce0;
+        }
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f6f9;
-            color: #333;
-            max-width: 600px;
-            margin: 40px auto;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            max-width: 700px;
+            margin: 30px auto;
             padding: 20px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .container {
+            background-color: var(--card-bg);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
         }
         h1 {
-            color: #1a73e8;
+            color: var(--primary-color);
             text-align: center;
+            margin-bottom: 25px;
         }
-        .input-group {
+        .section {
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        h3 {
+            margin-top: 0;
+            color: #202124;
+            font-size: 1.1rem;
+        }
+        .input-row {
             display: flex;
             gap: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
         input[type="text"] {
             flex: 1;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 16px;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input[type="text"]:focus {
+            border-color: var(--primary-color);
         }
         button {
-            padding: 10px 20px;
-            background-color: #1a73e8;
+            padding: 12px 20px;
+            background-color: var(--primary-color);
             color: white;
             border: none;
-            border-radius: 4px;
-            font-size: 16px;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 500;
             cursor: pointer;
+            transition: background-color 0.2s;
         }
         button:hover {
-            background-color: #1557b0;
+            background-color: var(--primary-hover);
         }
-        #output {
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-left: 4px solid #1a73e8;
+        ul.shopping-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        ul.shopping-list li {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 15px;
+            background: #fdfdfd;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            margin-bottom: 8px;
+            transition: background 0.2s;
+        }
+        ul.shopping-list li.completed {
+            background: #f1f3f4;
+            text-decoration: line-through;
+            color: #80868b;
+        }
+        .item-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            cursor: pointer;
+        }
+        .delete-btn {
+            background: transparent;
+            color: #d93025;
+            border: none;
+            padding: 6px 10px;
+            font-size: 14px;
+            cursor: pointer;
             border-radius: 4px;
+        }
+        .delete-btn:hover {
+            background: #fce8e6;
+        }
+        #ai-response {
+            background: #f1f3f4;
+            padding: 15px;
+            border-radius: 6px;
+            font-size: 14px;
             white-space: pre-wrap;
-            min-height: 50px;
+            margin-top: 10px;
+            border-left: 4px solid var(--primary-color);
         }
     </style>
 </head>
 <body>
 
-    <h1>Visual Shopping List</h1>
-    
-    <div class="input-group">
-        <input type="text" id="userInput" placeholder="e.g., Suggest items for a healthy grocery list...">
-        <button onclick="handleUserClick()">Ask Gemini</button>
-    </div>
+    <div class="container">
+        <h1>Visual Shopping List</h1>
 
-    <h3>Response / Results:</h3>
-    <div id="output">Your Gemini results will appear here...</div>
+        <!-- Add Manual Item Section -->
+        <div class="section">
+            <h3>Add Shopping Item</h3>
+            <div class="input-row">
+                <input type="text" id="itemInput" placeholder="e.g., Organic Bananas, Milk, Bread..." onkeypress="checkEnter(event)">
+                <button onclick="addItem()">Add Item</button>
+            </div>
+        </div>
+
+        <!-- AI Assistant Section -->
+        <div class="section">
+            <h3>Ask Gemini AI for Suggestions</h3>
+            <div class="input-row">
+                <input type="text" id="aiPromptInput" placeholder="e.g., Ingredients for tacos, healthy snack ideas..." onkeypress="checkAIPromptEnter(event)">
+                <button onclick="askGemini()">Ask AI</button>
+            </div>
+            <div id="ai-response" style="display: none;"></div>
+        </div>
+
+        <!-- Current Shopping List Section -->
+        <div class="section">
+            <h3>My List (<span id="itemCount">0</span> items)</h3>
+            <ul id="shoppingList" class="shopping-list">
+                <!-- Items will appear here -->
+            </ul>
+        </div>
+    </div>
 
     <script>
         // Gemini API Configuration
         const GEMINI_API_KEY = "AQ.Ab8RN6KxqAyx76ayxRcK2yZgRjN6WRYfIMUpWXxuY--m2DpxGA";
 
-        async function callGeminiAPI(promptText) {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+        // State & LocalStorage
+        let items = JSON.parse(localStorage.getItem('shopping_items')) || [];
+
+        window.onload = function() {
+            renderList();
+        };
+
+        function saveAndRender() {
+            localStorage.setItem('shopping_items', JSON.stringify(items));
+            renderList();
+        }
+
+        function addItem() {
+            const input = document.getElementById('itemInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            items.push({ text: text, completed: false });
+            input.value = '';
+            saveAndRender();
+        }
+
+        function checkEnter(event) {
+            if (event.key === 'Enter') {
+                addItem();
+            }
+        }
+
+        function checkAIPromptEnter(event) {
+            if (event.key === 'Enter') {
+                askGemini();
+            }
+        }
+
+        function toggleItem(index) {
+            items[index].completed = !items[index].completed;
+            saveAndRender();
+        }
+
+        function deleteItem(index) {
+            items.splice(index, 1);
+            saveAndRender();
+        }
+
+        function renderList() {
+            const listEl = document.getElementById('shoppingList');
+            const countEl = document.getElementById('itemCount');
             
+            listEl.innerHTML = '';
+            countEl.innerText = items.length;
+
+            if (items.length === 0) {
+                listEl.innerHTML = '<li style="justify-content: center; color: #80868b; font-style: italic;">Your shopping list is empty. Add items above or ask Gemini AI!</li>';
+                return;
+            }
+
+            items.forEach((item, index) => {
+                const li = document.createElement('li');
+                if (item.completed) {
+                    li.classList.add('completed');
+                }
+
+                li.innerHTML = `
+                    <div class="item-left" onclick="toggleItem(${index})">
+                        <input type="checkbox" ${item.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleItem(${index})">
+                        <span>${escapeHtml(item.text)}</span>
+                    </div>
+                    <button class="delete-btn" onclick="deleteItem(${index})">Delete</button>
+                `;
+                listEl.appendChild(li);
+            });
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+
+        async function askGemini() {
+            const promptInput = document.getElementById('aiPromptInput');
+            const responseDiv = document.getElementById('ai-response');
+            const promptText = promptInput.value.trim();
+
+            if (!promptText) {
+                alert("Please enter a prompt for Gemini!");
+                return;
+            }
+
+            responseDiv.style.display = 'block';
+            responseDiv.innerText = 'Thinking...';
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
             try {
                 const response = await fetch(url, {
                     method: 'POST',
@@ -81,7 +273,7 @@
                     },
                     body: JSON.stringify({
                         contents: [{
-                            parts: [{ text: promptText }]
+                            parts: [{ text: "Provide a helpful, concise shopping list or suggestions for: " + promptText }]
                         }]
                     })
                 });
@@ -90,27 +282,16 @@
 
                 if (!response.ok) {
                     console.error("Gemini API Error Response:", data);
-                    return `Error: ${data.error?.message || response.statusText}`;
+                    responseDiv.innerText = `Error: ${data.error?.message || response.statusText}`;
+                    return;
                 }
 
-                return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
+                const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
+                responseDiv.innerText = resultText;
             } catch (error) {
                 console.error("Network or Parsing Error:", error);
-                return null;
+                responseDiv.innerText = "Network error connecting to Gemini API.";
             }
-        }
-
-        async function handleUserClick() {
-            const inputVal = document.getElementById('userInput').value;
-            if (!inputVal.trim()) {
-                alert("Please type something first!");
-                return;
-            }
-
-            document.getElementById('output').innerText = "Thinking...";
-            
-            const result = await callGeminiAPI(inputVal);
-            document.getElementById('output').innerText = result;
         }
     </script>
 </body>
