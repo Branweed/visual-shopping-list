@@ -17,7 +17,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
-            max-width: 700px;
+            max-width: 650px;
             margin: 30px auto;
             padding: 20px;
         }
@@ -59,7 +59,6 @@
             border-radius: 6px;
             font-size: 15px;
             outline: none;
-            transition: border-color 0.2s;
         }
         input[type="text"]:focus {
             border-color: var(--primary-color);
@@ -73,7 +72,6 @@
             font-size: 15px;
             font-weight: 500;
             cursor: pointer;
-            transition: background-color 0.2s;
         }
         button:hover {
             background-color: var(--primary-hover);
@@ -92,10 +90,8 @@
             border: 1px solid var(--border-color);
             border-radius: 6px;
             margin-bottom: 8px;
-            transition: background 0.2s;
         }
-        ul.shopping-list li.completed {
-            background: #f1f3f4;
+        ul.shopping-list li.completed span {
             text-decoration: line-through;
             color: #80868b;
         }
@@ -138,7 +134,7 @@
         <div class="section">
             <h3>Add Shopping Item</h3>
             <div class="input-row">
-                <input type="text" id="itemInput" placeholder="e.g., Organic Bananas, Milk, Bread..." onkeypress="checkEnter(event)">
+                <input type="text" id="itemInput" placeholder="e.g., Bananas, Milk, Bread..." onkeypress="checkEnter(event)">
                 <button onclick="addItem()">Add Item</button>
             </div>
         </div>
@@ -147,7 +143,7 @@
         <div class="section">
             <h3>Ask Gemini AI for Suggestions</h3>
             <div class="input-row">
-                <input type="text" id="aiPromptInput" placeholder="e.g., Ingredients for tacos, healthy snack ideas..." onkeypress="checkAIPromptEnter(event)">
+                <input type="text" id="aiPromptInput" placeholder="e.g., Ingredients for taco night..." onkeypress="checkAIPromptEnter(event)">
                 <button onclick="askGemini()">Ask AI</button>
             </div>
             <div id="ai-response" style="display: none;"></div>
@@ -157,7 +153,7 @@
         <div class="section">
             <h3>My List (<span id="itemCount">0</span> items)</h3>
             <ul id="shoppingList" class="shopping-list">
-                <!-- Items will appear here -->
+                <!-- Items render here -->
             </ul>
         </div>
     </div>
@@ -166,7 +162,7 @@
         // Gemini API Configuration
         const GEMINI_API_KEY = "AQ.Ab8RN6KxqAyx76ayxRcK2yZgRjN6WRYfIMUpWXxuY--m2DpxGA";
 
-        // State & LocalStorage
+        // Local Storage State
         let items = JSON.parse(localStorage.getItem('shopping_items')) || [];
 
         window.onload = function() {
@@ -189,15 +185,11 @@
         }
 
         function checkEnter(event) {
-            if (event.key === 'Enter') {
-                addItem();
-            }
+            if (event.key === 'Enter') addItem();
         }
 
         function checkAIPromptEnter(event) {
-            if (event.key === 'Enter') {
-                askGemini();
-            }
+            if (event.key === 'Enter') askGemini();
         }
 
         function toggleItem(index) {
@@ -268,9 +260,7 @@
             try {
                 const response = await fetch(url, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [{
                             parts: [{ text: "Provide a helpful, concise shopping list or suggestions for: " + promptText }]
@@ -289,7 +279,7 @@
                 const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
                 responseDiv.innerText = resultText;
             } catch (error) {
-                console.error("Network or Parsing Error:", error);
+                console.error("Network Error:", error);
                 responseDiv.innerText = "Network error connecting to Gemini API.";
             }
         }
