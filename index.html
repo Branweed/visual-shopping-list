@@ -1,288 +1,1005 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visual Shopping List with Gemini AI</title>
-    <style>
-        :root {
-            --primary-color: #1a73e8;
-            --primary-hover: #1557b0;
-            --bg-color: #f8f9fa;
-            --card-bg: #ffffff;
-            --text-color: #333333;
-            --border-color: #dadce0;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            max-width: 650px;
-            margin: 30px auto;
-            padding: 20px;
-        }
-        .container {
-            background-color: var(--card-bg);
-            padding: 25px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-        }
-        h1 {
-            color: var(--primary-color);
-            text-align: center;
-            margin-bottom: 25px;
-        }
-        .section {
-            margin-bottom: 25px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .section:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
-            padding-bottom: 0;
-        }
-        h3 {
-            margin-top: 0;
-            color: #202124;
-            font-size: 1.1rem;
-        }
-        .input-row {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        input[type="text"] {
-            flex: 1;
-            padding: 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            font-size: 15px;
-            outline: none;
-        }
-        input[type="text"]:focus {
-            border-color: var(--primary-color);
-        }
-        button {
-            padding: 12px 20px;
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 15px;
-            font-weight: 500;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: var(--primary-hover);
-        }
-        ul.shopping-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        ul.shopping-list li {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 15px;
-            background: #fdfdfd;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            margin-bottom: 8px;
-        }
-        ul.shopping-list li.completed span {
-            text-decoration: line-through;
-            color: #80868b;
-        }
-        .item-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex: 1;
-            cursor: pointer;
-        }
-        .delete-btn {
-            background: transparent;
-            color: #d93025;
-            border: none;
-            padding: 6px 10px;
-            font-size: 14px;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-        .delete-btn:hover {
-            background: #fce8e6;
-        }
-        #ai-response {
-            background: #f1f3f4;
-            padding: 15px;
-            border-radius: 6px;
-            font-size: 14px;
-            white-space: pre-wrap;
-            margin-top: 10px;
-            border-left: 4px solid var(--primary-color);
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Visual Shopping List</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#2563eb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+:root{
+  --primary:#2563eb; --primary-soft:#dbeafe; --bg:#f1f5f9; --card:#fff; --ink:#0f172a; --muted:#64748b;
+  --line:#e2e8f0; --green:#059669; --red:#dc2626;
+  --shadow:0 1px 2px rgba(15,23,42,.06),0 2px 8px rgba(15,23,42,.05);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body.lock{overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+input,select{font:inherit;font-size:16px;color:var(--ink);background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:10px 12px;min-height:46px;width:100%;min-width:0}
+input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.18)}
+.hidden{display:none!important}
+
+.bar{position:sticky;top:0;z-index:30;background:var(--primary);color:#fff;display:flex;align-items:center;gap:8px;
+  padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 10px;box-shadow:0 2px 6px rgba(0,0,0,.12)}
+.bar h1{flex:1;min-width:0;margin:0;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hbtn{flex:none;background:rgba(255,255,255,.18);border:0;color:#fff;border-radius:10px;min-height:38px;min-width:38px;padding:0 12px;font-weight:600;font-size:14px}
+.banner{text-align:center;font-size:13.5px;padding:7px 12px}
+.banner.off{background:#fef3c7;color:#92400e}
+.banner.err{background:#fee2e2;color:#991b1b}
+
+main{max-width:760px;margin:0 auto;padding:12px 12px calc(86px + env(safe-area-inset-bottom,0px))}
+.view{display:none}.view.on{display:block}
+
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;background:#fff;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs button{flex:1;border:0;background:none;min-height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:12px;font-weight:600;color:var(--muted)}
+.tabs button span{font-size:21px;line-height:1}
+.tabs button[aria-current=page]{color:var(--primary)}
+
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 14px;font-weight:600;font-size:14px;color:#475569}
+.chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.chip.add{border-style:dashed;color:var(--primary)}
+
+.quick{display:flex;gap:8px;margin-bottom:12px}
+.btn{border:1px solid var(--line);background:#fff;border-radius:10px;min-height:46px;padding:0 16px;font-weight:700}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.green{background:var(--green);border-color:var(--green);color:#fff}
+.btn.violet{background:#6366f1;border-color:#6366f1;color:#fff}
+.btn.danger{color:var(--red);border-color:#fecaca}
+.btn.dangerfill{background:var(--red);border-color:var(--red);color:#fff}
+.btn.block{width:100%}
+.btn:disabled{opacity:.55}
+
+.totals{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;background:var(--card);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
+.totals .lbl{font-size:11.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.totals b{font-size:19px;font-variant-numeric:tabular-nums}
+.totals .t b{color:var(--green)}
+.links{display:flex;justify-content:flex-end;gap:18px;padding:2px 4px 0}
+.link{background:none;border:0;color:var(--primary);font-weight:600;font-size:14px;padding:8px 0}
+
+.group{margin-top:14px}
+.ghead{display:flex;justify-content:space-between;align-items:baseline;padding:0 4px 6px}
+.ghead h2{margin:0;font-size:16px;color:var(--primary)}
+.ghead span{font-weight:700;color:var(--green);font-size:14px;font-variant-numeric:tabular-nums}
+.gcard{background:var(--card);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+
+.litem{display:flex;align-items:center;gap:2px;padding:6px 4px;border-top:1px solid var(--line)}
+.litem:first-child{border-top:0}
+.cb{flex:none;width:46px;height:46px;border:0;background:none;display:grid;place-items:center}
+.cb i{width:26px;height:26px;border-radius:8px;border:2px solid #cbd5e1;display:grid;place-items:center;font-style:normal;color:#fff;font-size:15px;font-weight:800}
+.cb.on i{background:var(--green);border-color:var(--green)}
+.lbody{flex:1;min-width:0;display:flex;align-items:center;gap:10px;border:0;background:none;text-align:left;padding:4px 0;min-height:52px}
+.thumb{flex:none;width:48px;height:48px;border-radius:10px;object-fit:cover;background:#e2e8f0}
+.thumb.ph{display:grid;place-items:center;font-size:22px}
+.ltext{min-width:0}
+.lname{font-weight:600;line-height:1.25;overflow-wrap:anywhere}
+.lmeta{font-size:13px;color:var(--muted);margin-top:2px}
+.price{color:var(--green);font-weight:700}
+.x{flex:none;width:42px;height:42px;border:0;border-radius:10px;background:none;color:#94a3b8;font-size:17px}
+.litem.done .lname{text-decoration:line-through;color:#94a3b8}
+.litem.done .thumb{opacity:.45;filter:grayscale(1)}
+
+.empty{text-align:center;color:var(--muted);padding:40px 16px}
+.empty b{display:block;color:var(--ink);font-size:17px;margin-bottom:4px}
+.empty .btn{margin-top:14px}
+
+.srow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:0;border-top:1px solid var(--line);background:none;padding:12px 16px;min-height:62px}
+.srow:first-child{border-top:0}
+.srow .sn{font-weight:700;font-size:16.5px}
+.srow .sc{font-size:13px;color:var(--muted)}
+.srow .chev{margin-left:auto;color:#94a3b8;font-size:24px;line-height:1}
+.srow.add{color:var(--green);font-weight:700}
+.sbar{display:flex;align-items:center;gap:8px;margin:0 0 10px}
+.sbar .grow{flex:1}
+#invSearch{margin-bottom:12px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+@media(max-width:420px){.grid{grid-template-columns:1fr 1fr}}
+.icard{position:relative;background:var(--card);border-radius:14px;box-shadow:var(--shadow);border:2px solid transparent;overflow:hidden}
+.icard.on{border-color:var(--green)}
+.iadd{display:block;width:100%;border:0;background:none;text-align:left;padding:0 0 10px}
+.iadd img,.iadd .ph{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#e2e8f0}
+.iadd .ph{display:grid;place-items:center;font-size:34px}
+.iname{font-weight:600;font-size:14.5px;line-height:1.25;padding:8px 10px 0;overflow-wrap:anywhere}
+.imeta{font-size:12.5px;color:var(--muted);padding:3px 10px 0}
+.iedit{position:absolute;top:6px;right:6px;width:38px;height:38px;border-radius:50%;border:0;background:rgba(255,255,255,.94);box-shadow:0 1px 4px rgba(0,0,0,.18);font-size:16px}
+.onbadge{position:absolute;top:9px;left:8px;background:var(--green);color:#fff;font-size:11.5px;font-weight:700;border-radius:999px;padding:3px 8px}
+
+.card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:14px;margin-bottom:14px}
+.card h2{margin:0 0 12px;font-size:17px}
+.fl{display:block;margin-bottom:12px}
+.fl>span{display:block;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0 0 5px 2px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.money{position:relative}
+.money::before{content:"$";position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.money input{padding-left:24px}
+.photo{display:flex;gap:12px;align-items:center;margin-bottom:14px}
+.photo .pv{flex:none;width:96px;height:96px;border-radius:14px;object-fit:cover;background:#e2e8f0;display:grid;place-items:center;font-size:32px}
+.photo .pb{flex:1;display:flex;flex-direction:column;gap:7px}
+.photo .pb .btn{min-height:40px;font-size:14px;font-weight:600}
+.check{display:flex;align-items:center;gap:10px;margin:2px 0 14px;font-size:15px}
+.check input{width:22px;height:22px;min-height:0;accent-color:var(--primary)}
+.actions{display:flex;gap:8px}
+.actions .btn{flex:1}
+
+.calh{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.calh b{font-size:16px}
+.calnav{width:42px;height:42px;border-radius:10px;border:0;background:#e2e8f0;font-size:18px;font-weight:700}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.dn{font-size:12px;font-weight:700;color:#94a3b8;padding:4px 0}
+.day{border:0;background:none;border-radius:10px;min-height:42px;font-size:15px;position:relative}
+.day.today{color:var(--primary);font-weight:800;background:var(--primary-soft)}
+.day.sel{background:var(--primary);color:#fff}
+.day.dot::after{content:"";position:absolute;bottom:5px;left:50%;width:5px;height:5px;margin-left:-2.5px;border-radius:50%;background:var(--green)}
+.day.sel.dot::after{background:#fff}
+.evs{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.evs h3{margin:0 0 6px;font-size:14px;color:var(--muted)}
+.ev{display:flex;align-items:center;gap:8px;padding:4px 0}
+.ev span{flex:1}
+
+.scrim{position:fixed;inset:0;z-index:50;background:rgba(15,23,42,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:#fff;width:100%;max-width:560px;max-height:92vh;max-height:92dvh;border-radius:20px 20px 0 0;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(min-width:640px){.scrim{align-items:center}.sheet{border-radius:20px}}
+.shead{display:flex;align-items:center;gap:8px;padding:12px 12px 10px 18px;border-bottom:1px solid var(--line)}
+.shead b{flex:1;font-size:17px}
+.sclose{width:40px;height:40px;border-radius:10px;border:0;background:#f1f5f9;font-size:16px}
+.sbody{padding:16px;overflow:auto;-webkit-overflow-scrolling:touch}
+.msg{margin:0 0 16px;color:#475569}
+.menu .btn{width:100%;margin-bottom:8px;text-align:left;font-weight:600}
+.qty{display:flex;align-items:center;justify-content:center;gap:18px;margin:6px 0 18px}
+.qty button{width:50px;height:50px;border-radius:50%;border:1px solid var(--line);background:#fff;font-size:22px;font-weight:700}
+.qty b{font-size:26px;min-width:44px;text-align:center}
+.detail{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+.detail img,.detail .ph{width:72px;height:72px;border-radius:12px;object-fit:cover;background:#e2e8f0;display:grid;place-items:center;font-size:28px;flex:none}
+
+.toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:14px;
+  background:#0f172a;color:#fff;padding:10px 14px;border-radius:12px;font-size:14.5px;max-width:92%;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1;pointer-events:auto}
+.toast button{border:0;background:none;color:#93c5fd;font-weight:700;padding:4px 2px}
+</style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>Visual Shopping List</h1>
+<header class="bar">
+  <h1 id="title">My Master List</h1>
+  <div id="hdrActions" style="display:flex;gap:6px"></div>
+</header>
+<div id="offline" class="banner off hidden">You're offline. Changes will sync when you reconnect.</div>
+<div id="dberr" class="banner err hidden"></div>
 
-        <!-- Add Manual Item Section -->
-        <div class="section">
-            <h3>Add Shopping Item</h3>
-            <div class="input-row">
-                <input type="text" id="itemInput" placeholder="e.g., Bananas, Milk, Bread..." onkeypress="checkEnter(event)">
-                <button onclick="addItem()">Add Item</button>
-            </div>
-        </div>
+<main>
+  <!-- LIST -->
+  <section class="view" id="v-list">
+    <div class="chips" id="listChips"></div>
+    <form class="quick" id="quickForm" autocomplete="off">
+      <input id="quickInput" list="invNames" placeholder="⚡ Quick add item…" enterkeyhint="done" aria-label="Quick add item">
+      <button class="btn primary" type="submit">Add</button>
+    </form>
+    <datalist id="invNames"></datalist>
+    <div id="listBody"></div>
+  </section>
 
-        <!-- AI Assistant Section -->
-        <div class="section">
-            <h3>Ask Gemini AI for Suggestions</h3>
-            <div class="input-row">
-                <input type="text" id="aiPromptInput" placeholder="e.g., Ingredients for taco night..." onkeypress="checkAIPromptEnter(event)">
-                <button onclick="askGemini()">Ask AI</button>
-            </div>
-            <div id="ai-response" style="display: none;"></div>
-        </div>
+  <!-- STORES / ADD ITEMS -->
+  <section class="view" id="v-stores">
+    <input type="search" id="invSearch" placeholder="🔍 Search all items…" aria-label="Search items">
+    <div id="storesBody"></div>
+  </section>
 
-        <!-- Current Shopping List Section -->
-        <div class="section">
-            <h3>My List (<span id="itemCount">0</span> items)</h3>
-            <ul id="shoppingList" class="shopping-list">
-                <!-- Items render here -->
-            </ul>
-        </div>
-    </div>
+  <!-- CREATE & PLAN -->
+  <section class="view" id="v-create">
+    <div class="card"><h2>🛠️ Add new item</h2><div id="createForm"></div></div>
+    <div class="card" id="calendar"></div>
+  </section>
+</main>
 
-    <script>
-        // Gemini API Configuration
-        const GEMINI_API_KEY = "AQ.Ab8RN6KxqAyx76ayxRcK2yZgRjN6WRYfIMUpWXxuY--m2DpxGA";
+<nav class="tabs" aria-label="Sections">
+  <button data-tab="list"><span>📋</span>List</button>
+  <button data-tab="stores"><span>🛒</span>Add Items</button>
+  <button data-tab="create"><span>➕</span>Create &amp; Plan</button>
+</nav>
 
-        // Local Storage State
-        let items = JSON.parse(localStorage.getItem('shopping_items')) || [];
+<div class="toast" id="toast" role="status"></div>
 
-        window.onload = function() {
-            renderList();
-        };
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+import {
+  initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
+  collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDocs, onSnapshot, writeBatch
+} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
-        function saveAndRender() {
-            localStorage.setItem('shopping_items', JSON.stringify(items));
-            renderList();
+/* ===================== Firebase (same project as before) ===================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyAY0nDkSRxxBBbw6yFmQqN738DNHvv9lN0",
+  authDomain: "my-test-list01.firebaseapp.com",
+  projectId: "my-test-list01",
+  storageBucket: "my-test-list01.firebasestorage.app",
+  messagingSenderId: "924548717595",
+  appId: "1:924548717595:web:ca5bcb76c28fd485ab2cbe",
+  measurementId: "G-Z3SSWLB711"
+};
+const app = initializeApp(firebaseConfig);
+let db;
+try {
+  // Keeps a copy on the phone so the app opens and works with bad signal in a store.
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+} catch (e) {
+  db = getFirestore(app);
+}
+
+/* ===================== Constants & state ===================== */
+const PLACEHOLDER = "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&q=80";
+const DEFAULT_STORES = ["Aldi", "BJ's", "Market Basket", "Wal-Mart"];
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+const lsGet = k => { try { return localStorage.getItem("vsl:" + k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem("vsl:" + k, v); } catch (e) {} };
+
+function dateKey(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+
+const S = {
+  inventory: [], storeDocs: [], lists: [], listItems: [], events: [],
+  listId: lsGet("listId") || "default",
+  tab: ["list","stores","create"].includes(lsGet("tab")) ? lsGet("tab") : "list",
+  store: null, invQuery: "",
+  hideChecked: lsGet("hideChecked") === "1",
+  calMonth: new Date(), calDay: dateKey(new Date()),
+  ready: { inv: false, items: false }
+};
+
+/* ===================== Small helpers ===================== */
+const $ = s => document.querySelector(s);
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const k in (props || {})) {
+    const v = props[k];
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v;
+    else if (k === "text") e.textContent = v;
+    else if (k === "value") e.value = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(c)); }
+  return e;
+}
+const norm = s => String(s || "").trim().toLowerCase();
+const slug = s => norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "store";
+function priceNum(p) { const n = parseFloat(p); return isFinite(n) ? n : null; }
+const money = n => "$" + (Number(n) || 0).toFixed(2);
+const qtyOf = i => Math.max(1, Number(i.qty) || 1);
+const lineTotal = i => (priceNum(i.price) || 0) * qtyOf(i);
+const sum = (arr, f) => arr.reduce((a, x) => a + f(x), 0);
+const aisleLabel = a => !a ? "" : (/^\d+$/.test(String(a).trim()) ? "Aisle " + String(a).trim() : String(a));
+
+function aisleKey(a) {
+  if (!a) return [2, 0, ""];
+  const m = String(a).match(/(\d+)/);
+  return m ? [0, parseInt(m[1], 10), String(a).toLowerCase()] : [1, 0, String(a).toLowerCase()];
+}
+function byAisle(a, b) {
+  const x = aisleKey(a.aisle), y = aisleKey(b.aisle);
+  return x[0]-y[0] || x[1]-y[1] || x[2].localeCompare(y[2]) || norm(a.name).localeCompare(norm(b.name));
+}
+
+function thumbEl(src, cls) {
+  if (!src) return h("div", { class: cls + " ph", text: "🛒" });
+  const img = h("img", { class: cls, src, alt: "", loading: "lazy" });
+  img.addEventListener("error", () => img.replaceWith(h("div", { class: cls + " ph", text: "🛒" })), { once: true });
+  return img;
+}
+
+function toast(msg, action) {
+  const t = $("#toast");
+  t.textContent = "";
+  t.append(h("span", { text: msg }));
+  if (action) t.append(h("button", { text: action.label, onclick: () => { t.classList.remove("show"); action.fn(); } }));
+  t.classList.add("show");
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => t.classList.remove("show"), action ? 5000 : 2200);
+}
+function fail(e) { console.error(e); toast("Couldn't save that. Check your connection and try again."); }
+
+/* ===================== Sheets (pop-up panels) ===================== */
+function openSheet(title) {
+  const body = h("div", { class: "sbody" });
+  const api = {
+    body, closed: false, onclose: null,
+    close() {
+      if (api.closed) return;
+      api.closed = true; scrim.remove();
+      if (!document.querySelector(".scrim")) document.body.classList.remove("lock");
+      if (api.onclose) api.onclose();
+    }
+  };
+  const scrim = h("div", { class: "scrim" },
+    h("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-label": title },
+      h("div", { class: "shead" }, h("b", { text: title }), h("button", { class: "sclose", "aria-label": "Close", text: "✕", onclick: () => api.close() })),
+      body));
+  scrim.addEventListener("click", e => { if (e.target === scrim) api.close(); });
+  document.body.append(scrim);
+  document.body.classList.add("lock");
+  return api;
+}
+function choose(title, msg, options) {
+  return new Promise(res => {
+    let done = false;
+    const s = openSheet(title);
+    const fin = v => { if (done) return; done = true; res(v); s.close(); };
+    s.onclose = () => { if (!done) { done = true; res(null); } };
+    s.body.append(h("p", { class: "msg", text: msg }),
+      h("div", { class: "actions", style: "flex-wrap:wrap" },
+        options.map(o => h("button", { class: "btn " + (o.cls || ""), text: o.label, onclick: () => fin(o.value) }))));
+  });
+}
+const confirmSheet = (title, msg, label, danger) =>
+  choose(title, msg, [{ label: "Cancel", value: null }, { label, value: true, cls: danger ? "dangerfill" : "primary" }]).then(v => v === true);
+
+function promptSheet(title, label, initial, okLabel) {
+  return new Promise(res => {
+    let done = false;
+    const s = openSheet(title);
+    const inp = h("input", { value: initial || "", placeholder: label, "aria-label": label, autocapitalize: "words", enterkeyhint: "done" });
+    const fin = v => { if (done) return; done = true; res(v); s.close(); };
+    s.onclose = () => { if (!done) { done = true; res(null); } };
+    const ok = () => { const v = inp.value.trim(); if (v) fin(v); };
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); ok(); } });
+    s.body.append(h("label", { class: "fl" }, h("span", { text: label }), inp),
+      h("div", { class: "actions" },
+        h("button", { class: "btn", text: "Cancel", onclick: () => fin(null) }),
+        h("button", { class: "btn primary", text: okLabel || "Save", onclick: ok })));
+    setTimeout(() => inp.focus(), 60);
+  });
+}
+
+/* ===================== Photos: shrink on the phone before saving ===================== */
+function pickImage(useCamera) {
+  return new Promise(res => {
+    const i = h("input", { type: "file", accept: "image/*", style: "display:none" });
+    if (useCamera) i.setAttribute("capture", "environment");
+    const done = f => { i.remove(); res(f); };
+    i.addEventListener("change", () => done(i.files && i.files[0] || null));
+    i.addEventListener("cancel", () => done(null));
+    document.body.append(i);
+    i.click();
+  });
+}
+async function compressImage(file, edge = 400, quality = 0.72) {
+  let src, w, ht, free = () => {};
+  try {
+    const b = await createImageBitmap(file, { imageOrientation: "from-image" });
+    src = b; w = b.width; ht = b.height; free = () => b.close && b.close();
+  } catch (e) {
+    const url = URL.createObjectURL(file);
+    src = await new Promise((ok, bad) => { const im = new Image(); im.onload = () => ok(im); im.onerror = bad; im.src = url; });
+    w = src.naturalWidth; ht = src.naturalHeight; free = () => URL.revokeObjectURL(url);
+  }
+  const s = Math.min(1, edge / Math.max(w, ht));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(w * s)); c.height = Math.max(1, Math.round(ht * s));
+  const g = c.getContext("2d");
+  g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(src, 0, 0, c.width, c.height);
+  free();
+  const out = c.toDataURL("image/jpeg", quality);
+  c.width = c.height = 0;
+  return out;
+}
+
+/* ===================== Data helpers ===================== */
+function storeNames() {
+  const set = new Set();
+  S.storeDocs.forEach(s => s.name && set.add(s.name));
+  S.inventory.forEach(i => i.store && set.add(i.store));
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+const itemsIn = store => S.inventory.filter(i => i.store === store);
+const currentList = () => S.lists.find(l => l.id === S.listId);
+const listName = () => (currentList() && currentList().name) || "My Master List";
+const findOnList = item => S.listItems.find(li => (li.inventoryId && li.inventoryId === item.id) || (norm(li.name) === norm(item.name) && li.store === item.store));
+
+function addToList(item) {
+  const existing = findOnList(item);
+  if (existing) {
+    const q = qtyOf(existing) + 1;
+    updateDoc(doc(db, S.listId, existing.id), { qty: q, inCart: false }).catch(fail);
+    toast(`${item.name} ×${q} on ${listName()}`);
+  } else {
+    addDoc(collection(db, S.listId), {
+      name: item.name, aisle: item.aisle || "", price: item.price || "", image: item.image || PLACEHOLDER,
+      store: item.store || "Other", addedAt: Date.now(), inCart: false, qty: 1, inventoryId: item.id || null
+    }).catch(fail);
+    toast(`Added ${item.name} to ${listName()}`);
+  }
+}
+
+async function commitOps(ops) {
+  // ops: functions that take a batch. Firestore allows 500 writes per batch.
+  for (let i = 0; i < ops.length; i += 400) {
+    const b = writeBatch(db);
+    ops.slice(i, i + 400).forEach(fn => fn(b));
+    await b.commit();
+  }
+}
+function ensureStoreDoc(name) {
+  if (!name || S.storeDocs.some(s => s.name === name)) return;
+  setDoc(doc(db, "stores", slug(name)), { name, createdAt: Date.now() }, { merge: true }).catch(() => {});
+}
+
+// When a saved item changes, update its copies on every list so prices and aisles stay correct.
+async function syncListsFromItem(oldItem, data) {
+  for (const l of S.lists) {
+    try {
+      const snap = await getDocs(collection(db, l.id));
+      const ops = [];
+      snap.forEach(ds => {
+        const v = ds.data();
+        const match = (v.inventoryId && v.inventoryId === oldItem.id) || (norm(v.name) === norm(oldItem.name) && v.store === oldItem.store);
+        if (match) ops.push(b => b.update(ds.ref, { name: data.name, aisle: data.aisle, price: data.price, image: data.image, store: data.store, inventoryId: oldItem.id }));
+      });
+      if (ops.length) await commitOps(ops);
+    } catch (e) { console.warn("list sync", l.id, e); }
+  }
+}
+
+/* ===================== Header & tabs ===================== */
+function setTab(t) {
+  S.tab = t; lsSet("tab", t);
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + t));
+  document.querySelectorAll(".tabs button").forEach(b => {
+    if (b.dataset.tab === t) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  });
+  renderHeader();
+  window.scrollTo(0, 0);
+}
+function renderHeader() {
+  const title = $("#title"), act = $("#hdrActions");
+  act.textContent = "";
+  if (S.tab === "list") {
+    title.textContent = listName();
+    act.append(h("button", { class: "hbtn", text: "📤 Share", onclick: shareList }),
+               h("button", { class: "hbtn", "aria-label": "List options", text: "⋯", onclick: listMenu }));
+  } else if (S.tab === "stores") {
+    title.textContent = S.store ? S.store : "Add Items";
+    if (S.store) act.append(h("button", { class: "hbtn", "aria-label": "Store options", text: "⋯", onclick: () => storeMenu(S.store) }));
+  } else {
+    title.textContent = "Create & Plan";
+  }
+}
+
+/* ===================== LIST view ===================== */
+function renderChips() {
+  const host = $("#listChips");
+  host.textContent = "";
+  S.lists.forEach(l => host.append(h("button", { class: "chip" + (l.id === S.listId ? " on" : ""), text: l.name || "Untitled",
+    onclick: () => { if (l.id !== S.listId) switchList(l.id); } })));
+  host.append(h("button", { class: "chip add", text: "＋ New list", onclick: newList }));
+}
+
+function renderList() {
+  const host = $("#listBody");
+  host.textContent = "";
+  if (!S.ready.items) { host.append(h("div", { class: "empty", text: "Loading…" })); return; }
+  const items = S.listItems;
+  if (!items.length) {
+    host.append(h("div", { class: "empty" }, h("b", { text: "Your list is empty" }),
+      "Type an item above, or open Add Items and tap things you need.",
+      h("br"), h("button", { class: "btn primary", text: "🛒 Browse store items", onclick: () => setTab("stores") })));
+    return;
+  }
+  const checked = items.filter(i => i.inCart);
+  host.append(h("div", { class: "totals" },
+    h("div", { class: "t" }, h("div", { class: "lbl", text: "Total" }), h("b", { text: money(sum(items, lineTotal)) })),
+    h("div", {}, h("div", { class: "lbl", text: "In cart" }), h("b", { text: money(sum(checked, lineTotal)) })),
+    h("div", {}, h("div", { class: "lbl", text: "Done" }), h("b", { text: `${checked.length}/${items.length}` }))));
+  if (checked.length) host.append(h("div", { class: "links" },
+    h("button", { class: "link", text: S.hideChecked ? `Show checked (${checked.length})` : "Hide checked",
+      onclick: () => { S.hideChecked = !S.hideChecked; lsSet("hideChecked", S.hideChecked ? "1" : "0"); renderList(); } }),
+    h("button", { class: "link", text: "Clear checked", onclick: clearChecked })));
+
+  const groups = new Map();
+  items.forEach(i => { const k = i.store || "Other"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i); });
+  const keys = [...groups.keys()].sort((a, b) => (a === "Other") - (b === "Other") || a.localeCompare(b));
+  for (const k of keys) {
+    const all = groups.get(k);
+    let rows = all.slice().sort((a, b) => (a.inCart ? 1 : 0) - (b.inCart ? 1 : 0) || byAisle(a, b));
+    if (S.hideChecked) rows = rows.filter(i => !i.inCart);
+    if (!rows.length) continue;
+    host.append(h("section", { class: "group" },
+      h("div", { class: "ghead" }, h("h2", { text: k }), h("span", { text: money(sum(all, lineTotal)) })),
+      h("div", { class: "gcard" }, rows.map(listRow))));
+  }
+}
+
+function listRow(it) {
+  const p = priceNum(it.price);
+  const metaText = [aisleLabel(it.aisle), qtyOf(it) > 1 ? "×" + qtyOf(it) : ""].filter(Boolean).join(" · ");
+  const meta = h("div", { class: "lmeta" }, metaText,
+    p != null ? h("span", { class: "price", text: (metaText ? "  " : "") + money(p * qtyOf(it)) }) : null);
+  return h("div", { class: "litem" + (it.inCart ? " done" : "") },
+    h("button", { class: "cb" + (it.inCart ? " on" : ""), "aria-label": (it.inCart ? "Uncheck " : "Check ") + it.name,
+      onclick: () => updateDoc(doc(db, S.listId, it.id), { inCart: !it.inCart }).catch(fail) },
+      h("i", { text: it.inCart ? "✓" : "" })),
+    h("button", { class: "lbody", onclick: () => openListItem(it) },
+      thumbEl(it.image, "thumb"),
+      h("div", { class: "ltext" }, h("div", { class: "lname", text: it.name || "Untitled" }), meta)),
+    h("button", { class: "x", "aria-label": "Remove " + it.name, text: "✕", onclick: () => removeListItem(it) }));
+}
+
+function removeListItem(it) {
+  const { id, ...data } = it;
+  const listId = S.listId;
+  deleteDoc(doc(db, listId, id)).catch(fail);
+  toast(`Removed ${it.name}`, { label: "Undo", fn: () => setDoc(doc(db, listId, id), data).catch(fail) });
+}
+
+function openListItem(it) {
+  const s = openSheet(it.name || "Item");
+  const inv = S.inventory.find(i => i.id === it.inventoryId) || S.inventory.find(i => norm(i.name) === norm(it.name) && i.store === it.store);
+  let q = qtyOf(it);
+  const qEl = h("b", { text: String(q) });
+  const setQ = n => { q = Math.max(1, n); qEl.textContent = q; updateDoc(doc(db, S.listId, it.id), { qty: q }).catch(fail); };
+  const p = priceNum(it.price);
+  s.body.append(
+    h("div", { class: "detail" }, thumbEl(it.image, ""),
+      h("div", {}, h("div", { class: "lname", text: it.name }),
+        h("div", { class: "lmeta", text: [it.store, aisleLabel(it.aisle), p != null ? money(p) + " each" : "No price yet"].filter(Boolean).join(" · ") }))),
+    h("div", { class: "qty" },
+      h("button", { "aria-label": "Less", text: "−", onclick: () => setQ(q - 1) }), qEl,
+      h("button", { "aria-label": "More", text: "+", onclick: () => setQ(q + 1) })),
+    h("div", { class: "menu" },
+      inv ? h("button", { class: "btn", text: "✏️  Edit item (price, aisle, photo)", onclick: () => { s.close(); openEdit(inv); } }) : null,
+      h("button", { class: "btn danger", text: "🗑  Remove from list", onclick: () => { s.close(); removeListItem(it); } }),
+      h("button", { class: "btn primary", style: "text-align:center", text: "Done", onclick: () => s.close() })));
+}
+
+async function clearChecked() {
+  const done = S.listItems.filter(i => i.inCart);
+  if (!done.length) return;
+  const listId = S.listId;
+  const copies = done.map(({ id, ...data }) => ({ id, data }));
+  try { await commitOps(copies.map(c => b => b.delete(doc(db, listId, c.id)))); } catch (e) { return fail(e); }
+  toast(`Cleared ${done.length} item${done.length === 1 ? "" : "s"}`, { label: "Undo",
+    fn: () => commitOps(copies.map(c => b => b.set(doc(db, listId, c.id), c.data))).catch(fail) });
+}
+
+async function shareList() {
+  const items = S.listItems;
+  let text = `🛒 ${listName()}\nTotal: ${money(sum(items, lineTotal))}\n\n`;
+  const groups = new Map();
+  items.forEach(i => { const k = i.store || "Other"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i); });
+  for (const [store, arr] of groups) {
+    text += `📍 ${store} (${money(sum(arr, lineTotal))}):\n`;
+    arr.slice().sort(byAisle).forEach(i => {
+      const p = priceNum(i.price);
+      text += `  ${i.inCart ? "✅" : "◻️"} ${i.name}${qtyOf(i) > 1 ? " ×" + qtyOf(i) : ""}${i.aisle ? ` (${aisleLabel(i.aisle)})` : ""}${p != null ? " - " + money(p * qtyOf(i)) : ""}\n`;
+    });
+    text += "\n";
+  }
+  text = text.trim();
+  if (navigator.share) { try { await navigator.share({ title: listName(), text }); } catch (e) {} return; }
+  try { await navigator.clipboard.writeText(text); toast("List copied, paste it into a text"); } catch (e) { toast("Couldn't share from this browser"); }
+}
+
+function listMenu() {
+  const s = openSheet(listName());
+  const row = (label, fn, cls) => h("button", { class: "btn " + (cls || ""), text: label, onclick: () => { s.close(); fn(); } });
+  s.body.append(h("div", { class: "menu" },
+    row("📤  Share list", shareList),
+    row("✏️  Rename list", renameList),
+    row("🧹  Clear checked items", clearChecked),
+    row("＋  New list", newList),
+    row("🗑  Delete this list", deleteList, "danger")));
+}
+async function newList() {
+  const name = await promptSheet("New list", "List name", "", "Create");
+  if (!name) return;
+  const id = "list_" + Date.now();
+  setDoc(doc(db, "listsMeta", id), { name }).catch(fail);
+  switchList(id);
+}
+async function renameList() {
+  const name = await promptSheet("Rename list", "List name", listName(), "Save");
+  if (name) setDoc(doc(db, "listsMeta", S.listId), { name }, { merge: true }).catch(fail);
+}
+async function deleteList() {
+  if (S.lists.length <= 1) { toast("You need at least one list"); return; }
+  if (!await confirmSheet("Delete list?", `This deletes “${listName()}” and everything on it.`, "Delete", true)) return;
+  const id = S.listId;
+  try {
+    const snap = await getDocs(collection(db, id));
+    await commitOps(snap.docs.map(d => b => b.delete(d.ref)));
+    await deleteDoc(doc(db, "listsMeta", id));
+  } catch (e) { return fail(e); }
+  const next = S.lists.find(l => l.id !== id);
+  if (next) switchList(next.id);
+}
+
+$("#quickForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const inp = $("#quickInput");
+  const name = inp.value.trim();
+  if (!name) return;
+  // If you type something you've already saved, it comes in with its photo, price and aisle.
+  const matches = S.inventory.filter(i => norm(i.name) === norm(name));
+  const pick = matches.find(i => i.store === S.store) || matches[0];
+  if (pick) addToList(pick);
+  else {
+    addDoc(collection(db, S.listId), { name, aisle: "", price: "", image: PLACEHOLDER, store: S.store || "Other",
+      addedAt: Date.now(), inCart: false, qty: 1 }).catch(fail);
+    toast(`Added ${name}`);
+  }
+  inp.value = "";
+});
+
+/* ===================== ADD ITEMS (stores) view ===================== */
+function renderStores() {
+  const host = $("#storesBody");
+  host.textContent = "";
+  $("#invSearch").placeholder = S.store ? `🔍 Search ${S.store}…` : "🔍 Search all items…";
+  if (!S.ready.inv) { host.append(h("div", { class: "empty", text: "Loading…" })); return; }
+  const q = norm(S.invQuery);
+  const matchQ = i => !q || norm(i.name).includes(q) || norm(i.aisle).includes(q);
+
+  if (!S.store) {
+    if (q) {
+      const hits = S.inventory.filter(matchQ).sort((a, b) => String(a.store || "").localeCompare(String(b.store || "")) || byAisle(a, b));
+      if (!hits.length) {
+        host.append(h("div", { class: "empty" }, h("b", { text: "No matches" }), "Try another word, or save it as a new item.",
+          h("br"), h("button", { class: "btn primary", text: "＋ Add new item", onclick: () => openNewItem("", S.invQuery) })));
+        return;
+      }
+      host.append(h("div", { class: "grid" }, hits.map(i => itemCard(i, true))));
+      return;
+    }
+    const names = storeNames();
+    host.append(h("div", { class: "gcard" },
+      names.map(n => {
+        const c = itemsIn(n).length;
+        return h("button", { class: "srow", onclick: () => openStore(n) },
+          h("div", {}, h("div", { class: "sn", text: n }), h("div", { class: "sc", text: `${c} item${c === 1 ? "" : "s"}` })),
+          h("span", { class: "chev", text: "›" }));
+      }),
+      h("button", { class: "srow add", onclick: addStore }, "➕  Add new store")));
+    return;
+  }
+
+  const items = itemsIn(S.store).filter(matchQ).sort(byAisle);
+  host.append(h("div", { class: "sbar" },
+    h("button", { class: "btn", text: "‹ All stores", onclick: () => openStore(null) }),
+    h("div", { class: "grow" }),
+    h("button", { class: "btn primary", text: "＋ New item", onclick: () => openNewItem(S.store) })));
+  if (!items.length) {
+    host.append(h("div", { class: "empty" }, h("b", { text: q ? "No matches" : `No items saved for ${S.store} yet` }),
+      "Add one with a photo, aisle and price.", h("br"),
+      h("button", { class: "btn primary", text: "＋ Add item", onclick: () => openNewItem(S.store, q ? S.invQuery : "") })));
+    return;
+  }
+  host.append(h("div", { class: "grid" }, items.map(i => itemCard(i, false))));
+}
+
+function itemCard(item, showStore) {
+  const on = findOnList(item);
+  const p = priceNum(item.price);
+  const metaText = [showStore ? item.store : "", aisleLabel(item.aisle)].filter(Boolean).join(" · ");
+  return h("div", { class: "icard" + (on ? " on" : "") },
+    h("button", { class: "iadd", "aria-label": "Add " + item.name + " to list", onclick: () => addToList(item) },
+      thumbEl(item.image, ""),
+      h("div", { class: "iname", text: item.name }),
+      h("div", { class: "imeta" }, metaText,
+        p != null ? h("span", { class: "price", text: (metaText ? "  " : "") + money(p) }) : null)),
+    on ? h("span", { class: "onbadge", text: qtyOf(on) > 1 ? `✓ ×${qtyOf(on)}` : "✓ On list" }) : null,
+    h("button", { class: "iedit", "aria-label": "Edit " + item.name, text: "✏️", onclick: () => openEdit(item) }));
+}
+
+function openStore(name) {
+  S.store = name; S.invQuery = ""; $("#invSearch").value = "";
+  if (name) lsSet("lastStore", name);
+  renderHeader(); renderStores(); window.scrollTo(0, 0);
+}
+$("#invSearch").addEventListener("input", e => { S.invQuery = e.target.value; renderStores(); });
+
+async function addStore() {
+  const name = await promptSheet("New store", "Store name", "", "Add store");
+  if (!name) return null;
+  const existing = storeNames().find(n => norm(n) === norm(name));
+  const finalName = existing || name;
+  ensureStoreDoc(finalName);
+  if (S.tab === "stores") openStore(finalName);
+  return finalName;
+}
+
+function storeMenu(name) {
+  const s = openSheet(name);
+  const row = (label, fn, cls) => h("button", { class: "btn " + (cls || ""), text: label, onclick: () => { s.close(); fn(); } });
+  s.body.append(h("div", { class: "menu" },
+    row("＋  Add item to " + name, () => openNewItem(name)),
+    row("✏️  Rename store", () => renameStore(name)),
+    row("🗑  Delete store", () => deleteStore(name), "danger")));
+}
+async function renameStore(oldName) {
+  const name = await promptSheet("Rename store", "Store name", oldName, "Save");
+  if (!name || name === oldName) return;
+  try {
+    const ops = itemsIn(oldName).map(i => b => b.update(doc(db, "inventory", i.id), { store: name }));
+    S.storeDocs.filter(s => s.name === oldName).forEach(s => ops.push(b => b.delete(doc(db, "stores", s.id))));
+    ops.push(b => b.set(doc(db, "stores", slug(name)), { name, createdAt: Date.now() }, { merge: true }));
+    await commitOps(ops);
+    for (const l of S.lists) {
+      const snap = await getDocs(collection(db, l.id));
+      const lops = [];
+      snap.forEach(ds => { if (ds.data().store === oldName) lops.push(b => b.update(ds.ref, { store: name })); });
+      if (lops.length) await commitOps(lops);
+    }
+  } catch (e) { return fail(e); }
+  if (S.store === oldName) openStore(name);
+  toast("Store renamed");
+}
+async function deleteStore(name) {
+  const items = itemsIn(name);
+  if (!await confirmSheet("Delete store?", `This deletes “${name}” and its ${items.length} saved item${items.length === 1 ? "" : "s"}. Items already on your lists stay there.`, "Delete", true)) return;
+  try {
+    const ops = items.map(i => b => b.delete(doc(db, "inventory", i.id)));
+    S.storeDocs.filter(s => s.name === name).forEach(s => ops.push(b => b.delete(doc(db, "stores", s.id))));
+    await commitOps(ops);
+  } catch (e) { return fail(e); }
+  if (S.store === name) openStore(null);
+  toast("Store deleted");
+}
+
+/* ===================== Item form (create + edit) ===================== */
+let formSeq = 0;
+const liveForms = new Set();
+const refreshForms = () => [...liveForms].forEach(f => f.refresh());
+function itemForm(host, { item, store, name, onDone }) {
+  const editing = !!item;
+  const d = {
+    name: item ? item.name || "" : (name || ""),
+    store: item ? item.store || "" : (store || lsGet("lastStore") || ""),
+    aisle: item ? item.aisle || "" : "",
+    price: item ? (priceNum(item.price) != null ? String(item.price) : "") : "",
+    image: item && item.image && item.image !== PLACEHOLDER ? item.image : ""
+  };
+  let alsoAdd = false, busy = false;
+  const dl = h("datalist", { id: "aisles-" + (++formSeq) });
+  const storeSel = h("select", { "aria-label": "Store", onchange: async e => {
+    if (e.target.value === "__new") {
+      const n = await addStore();
+      if (n) d.store = n;
+    } else d.store = e.target.value;
+    refresh();
+  } });
+
+  // Store list and aisle suggestions can arrive after the form is drawn; refresh just those.
+  function refresh() {
+    const names = storeNames();
+    if (d.store && !names.includes(d.store)) names.push(d.store);
+    storeSel.textContent = "";
+    storeSel.append(h("option", { value: "", text: "Choose a store…", disabled: true, selected: !d.store }),
+      ...names.map(n => h("option", { value: n, text: n, selected: n === d.store })),
+      h("option", { value: "__new", text: "➕ Add new store…" }));
+    storeSel.value = d.store || "";
+    const aisles = [...new Set(itemsIn(d.store).map(i => i.aisle).filter(Boolean))].sort((a, b) => byAisle({ aisle: a }, { aisle: b }));
+    dl.textContent = ""; aisles.forEach(a => dl.append(h("option", { value: a })));
+  }
+  const live = { refresh: () => { if (!host.isConnected || !host.contains(storeSel)) liveForms.delete(live); else refresh(); } };
+  liveForms.add(live);
+
+  function draw() {
+    host.textContent = "";
+    refresh();
+    host.append(dl,
+      h("div", { class: "photo" },
+        d.image ? h("img", { class: "pv", src: d.image, alt: "Item photo" }) : h("div", { class: "pv", text: "📷" }),
+        h("div", { class: "pb" },
+          h("button", { class: "btn violet", type: "button", text: "📸 Take photo", onclick: () => getPhoto(true) }),
+          h("button", { class: "btn", type: "button", text: "🖼️ Choose photo", onclick: () => getPhoto(false) }),
+          d.image ? h("button", { class: "btn danger", type: "button", text: "Remove photo", onclick: () => { d.image = ""; draw(); } }) : null)),
+      h("label", { class: "fl" }, h("span", { text: "Item name" }),
+        h("input", { value: d.name, placeholder: "e.g. Eggs (dozen)", autocapitalize: "sentences", oninput: e => { d.name = e.target.value; } })),
+      h("label", { class: "fl" }, h("span", { text: "Store" }), storeSel),
+      h("div", { class: "two" },
+        h("label", { class: "fl" }, h("span", { text: "Aisle" }),
+          h("input", { list: dl.id, value: d.aisle, placeholder: "e.g. 4 or Dairy", oninput: e => { d.aisle = e.target.value; } })),
+        h("label", { class: "fl" }, h("span", { text: "Price" }),
+          h("div", { class: "money" }, h("input", { type: "text", inputmode: "decimal", value: d.price, placeholder: "0.00", oninput: e => { d.price = e.target.value; } })))),
+      !editing ? h("label", { class: "check" },
+        h("input", { type: "checkbox", checked: alsoAdd, onchange: e => { alsoAdd = e.target.checked; } }),
+        `Also add to “${listName()}”`) : null,
+      h("div", { class: "actions" },
+        editing ? h("button", { class: "btn danger", type: "button", text: "Delete", onclick: del }) : null,
+        h("button", { class: "btn green", type: "button", text: editing ? "Save changes" : "Save item", onclick: save })));
+  }
+
+  async function getPhoto(camera) {
+    const f = await pickImage(camera);
+    if (!f) return;
+    try { d.image = await compressImage(f); } catch (e) { toast("Couldn't use that photo"); }
+    draw();
+  }
+
+  async function save() {
+    if (busy) return;
+    const name = d.name.trim(), store = d.store.trim(), aisle = d.aisle.trim();
+    if (!name) { toast("Add an item name"); return; }
+    if (!store) { toast("Choose a store"); return; }
+    let price = d.price.trim().replace(/^\$/, "");
+    if (price) {
+      const n = parseFloat(price);
+      if (!isFinite(n) || n < 0) { toast("Price should be a number like 2.99"); return; }
+      price = n.toFixed(2);
+    }
+    const data = { name, store, aisle, price, image: d.image || PLACEHOLDER, updatedAt: Date.now() };
+    busy = true;
+    try {
+      ensureStoreDoc(store);
+      lsSet("lastStore", store);
+      if (editing) {
+        updateDoc(doc(db, "inventory", item.id), data).catch(fail);
+        syncListsFromItem(item, data);
+        toast("Saved");
+      } else {
+        const dup = S.inventory.find(i => i.store === store && norm(i.name) === norm(name));
+        let target = null;
+        if (dup) {
+          const c = await choose("Already saved", `“${dup.name}” is already in ${store}. Update it with these details instead?`,
+            [{ label: "Cancel", value: null }, { label: "Add as new", value: "new" }, { label: "Update it", value: "update", cls: "primary" }]);
+          if (!c) return;
+          if (c === "update") {
+            const merged = { ...data, image: d.image || dup.image || PLACEHOLDER };
+            updateDoc(doc(db, "inventory", dup.id), merged).catch(fail);
+            syncListsFromItem(dup, merged);
+            target = { ...dup, ...merged };
+          }
         }
-
-        function addItem() {
-            const input = document.getElementById('itemInput');
-            const text = input.value.trim();
-            if (!text) return;
-
-            items.push({ text: text, completed: false });
-            input.value = '';
-            saveAndRender();
+        if (!target) {
+          const ref = doc(collection(db, "inventory"));
+          setDoc(ref, { ...data, createdAt: Date.now() }).catch(fail);
+          target = { ...data, id: ref.id };
         }
+        if (alsoAdd) addToList(target); else toast(`Saved to ${store}`);
+      }
+      onDone && onDone();
+    } finally { busy = false; }
+  }
 
-        function checkEnter(event) {
-            if (event.key === 'Enter') addItem();
-        }
+  async function del() {
+    if (!await confirmSheet("Delete item?", `Remove “${item.name}” from ${item.store}? Copies already on your lists stay.`, "Delete", true)) return;
+    deleteDoc(doc(db, "inventory", item.id)).catch(fail);
+    toast("Item deleted");
+    onDone && onDone();
+  }
 
-        function checkAIPromptEnter(event) {
-            if (event.key === 'Enter') askGemini();
-        }
+  draw();
+}
 
-        function toggleItem(index) {
-            items[index].completed = !items[index].completed;
-            saveAndRender();
-        }
+function openEdit(item) {
+  const s = openSheet("Edit item");
+  itemForm(s.body, { item, onDone: () => s.close() });
+}
+function openNewItem(store, name) {
+  const s = openSheet(store ? `New item · ${store}` : "New item");
+  itemForm(s.body, { store, name, onDone: () => s.close() });
+}
+function renderCreateForm() {
+  itemForm($("#createForm"), { store: S.store, onDone: renderCreateForm });
+}
 
-        function deleteItem(index) {
-            items.splice(index, 1);
-            saveAndRender();
-        }
+/* ===================== Calendar ===================== */
+function renderCalendar() {
+  const host = $("#calendar");
+  host.textContent = "";
+  const y = S.calMonth.getFullYear(), m = S.calMonth.getMonth();
+  const shift = n => { S.calMonth = new Date(y, m + n, 1); renderCalendar(); };
+  host.append(h("div", { class: "calh" },
+    h("button", { class: "calnav", "aria-label": "Previous month", text: "‹", onclick: () => shift(-1) }),
+    h("b", { text: `${MONTHS[m]} ${y}` }),
+    h("button", { class: "calnav", "aria-label": "Next month", text: "›", onclick: () => shift(1) })));
+  const grid = h("div", { class: "cal" });
+  ["Su","Mo","Tu","We","Th","Fr","Sa"].forEach(n => grid.append(h("div", { class: "dn", text: n })));
+  const first = new Date(y, m, 1).getDay(), total = new Date(y, m + 1, 0).getDate(), today = dateKey(new Date());
+  for (let i = 0; i < first; i++) grid.append(h("div"));
+  for (let day = 1; day <= total; day++) {
+    const key = dateKey(new Date(y, m, day));
+    const cls = ["day", key === today ? "today" : "", key === S.calDay ? "sel" : "", S.events.some(e => e.date === key) ? "dot" : ""].join(" ");
+    grid.append(h("button", { class: cls, text: String(day), onclick: () => { S.calDay = key; renderCalendar(); } }));
+  }
+  host.append(grid);
 
-        function renderList() {
-            const listEl = document.getElementById('shoppingList');
-            const countEl = document.getElementById('itemCount');
-            
-            listEl.innerHTML = '';
-            countEl.innerText = items.length;
+  const [sy, sm, sd] = S.calDay.split("-").map(Number);
+  const label = new Date(sy, sm - 1, sd).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  const evs = S.events.filter(e => e.date === S.calDay);
+  host.append(h("div", { class: "evs" },
+    h("h3", { text: label }),
+    evs.length ? evs.map(ev => h("div", { class: "ev" }, h("span", { text: ev.title }),
+      h("button", { class: "x", "aria-label": "Delete " + ev.title, text: "✕", onclick: () => {
+        const { id, ...data } = ev;
+        deleteDoc(doc(db, "calendarEvents", id)).catch(fail);
+        toast("Event deleted", { label: "Undo", fn: () => setDoc(doc(db, "calendarEvents", id), data).catch(fail) });
+      } }))) : h("div", { class: "lmeta", text: "Nothing planned." }),
+    h("button", { class: "btn block", style: "margin-top:10px", text: "＋ Add to this day", onclick: async () => {
+      const title = await promptSheet("Add to " + label, "What's planned?", "", "Add");
+      if (title) addDoc(collection(db, "calendarEvents"), { title, date: S.calDay, createdAt: Date.now() }).catch(fail);
+    } })));
+}
 
-            if (items.length === 0) {
-                listEl.innerHTML = '<li style="justify-content: center; color: #80868b; font-style: italic;">Your shopping list is empty. Add items above or ask Gemini AI!</li>';
-                return;
-            }
+/* ===================== Live data ===================== */
+function dbError(e) {
+  console.error(e);
+  const b = $("#dberr");
+  b.textContent = e && e.code === "permission-denied"
+    ? "The database refused access. Check your Firestore rules."
+    : "Can't reach the database right now. Showing what's saved on this phone.";
+  b.classList.remove("hidden");
+}
+function updateNames() {
+  const dl = $("#invNames");
+  dl.textContent = "";
+  [...new Set(S.inventory.map(i => i.name).filter(Boolean))].sort().forEach(n => dl.append(h("option", { value: n })));
+}
 
-            items.forEach((item, index) => {
-                const li = document.createElement('li');
-                if (item.completed) {
-                    li.classList.add('completed');
-                }
+onSnapshot(collection(db, "inventory"), snap => {
+  S.inventory = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+  S.ready.inv = true;
+  $("#dberr").classList.add("hidden");
+  if (S.store && !storeNames().includes(S.store)) S.store = null;
+  updateNames(); renderStores(); renderHeader(); refreshForms();
+}, dbError);
 
-                li.innerHTML = `
-                    <div class="item-left" onclick="toggleItem(${index})">
-                        <input type="checkbox" ${item.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleItem(${index})">
-                        <span>${escapeHtml(item.text)}</span>
-                    </div>
-                    <button class="delete-btn" onclick="deleteItem(${index})">Delete</button>
-                `;
-                listEl.appendChild(li);
-            });
-        }
+let seeded = false;
+onSnapshot(collection(db, "stores"), snap => {
+  S.storeDocs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+  if (snap.empty && !snap.metadata.fromCache && !seeded) {
+    // First run of the new app: save the stores the old app always showed, so they stick.
+    seeded = true;
+    DEFAULT_STORES.forEach(n => setDoc(doc(db, "stores", slug(n)), { name: n, createdAt: Date.now() }, { merge: true }).catch(() => {}));
+  }
+  renderStores(); refreshForms();
+}, dbError);
 
-        function escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
-        }
+let unsubList = null;
+function switchList(id) {
+  S.listId = id; lsSet("listId", id);
+  S.ready.items = false; S.listItems = [];
+  if (unsubList) unsubList();
+  renderChips(); renderList(); renderHeader();
+  unsubList = onSnapshot(collection(db, id), snap => {
+    S.listItems = snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
+    S.ready.items = true;
+    renderList(); renderStores();
+  }, dbError);
+}
 
-        async function askGemini() {
-            const promptInput = document.getElementById('aiPromptInput');
-            const responseDiv = document.getElementById('ai-response');
-            const promptText = promptInput.value.trim();
+let firstLists = true;
+onSnapshot(collection(db, "listsMeta"), snap => {
+  S.lists = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+  if (!S.lists.length) {
+    if (!snap.metadata.fromCache) setDoc(doc(db, "listsMeta", "default"), { name: "My Master List" }).catch(() => {});
+    S.lists = [{ id: "default", name: "My Master List" }];
+  }
+  if (!S.lists.some(l => l.id === S.listId)) switchList(S.lists[0].id);
+  else if (firstLists) switchList(S.listId);
+  firstLists = false;
+  renderChips(); renderHeader();
+}, dbError);
 
-            if (!promptText) {
-                alert("Please enter a prompt for Gemini!");
-                return;
-            }
+onSnapshot(collection(db, "calendarEvents"), snap => {
+  S.events = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+  renderCalendar();
+}, dbError);
 
-            responseDiv.style.display = 'block';
-            responseDiv.innerText = 'Thinking...';
+/* ===================== Start ===================== */
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+const syncOnline = () => $("#offline").classList.toggle("hidden", navigator.onLine);
+window.addEventListener("online", syncOnline); window.addEventListener("offline", syncOnline); syncOnline();
 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{ text: "Provide a helpful, concise shopping list or suggestions for: " + promptText }]
-                        }]
-                    })
-                });
-
-                const data = await response.json();
-
-                if (!response.ok) {
-                    console.error("Gemini API Error Response:", data);
-                    responseDiv.innerText = `Error: ${data.error?.message || response.statusText}`;
-                    return;
-                }
-
-                const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
-                responseDiv.innerText = resultText;
-            } catch (error) {
-                console.error("Network Error:", error);
-                responseDiv.innerText = "Network error connecting to Gemini API.";
-            }
-        }
-    </script>
+setTab(S.tab);
+renderChips(); renderList(); renderStores(); renderCreateForm(); renderCalendar();
+</script>
 </body>
 </html>
