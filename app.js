@@ -773,6 +773,14 @@ async function leaveHousehold() {
   route();
 }
 
+async function importOldFlow() {
+  if (!await confirmSheet("Bring over old items?", "This copies the items, stores, lists and events from the original version of the app into the shared catalog and this household. Running it twice is safe.", "Bring them over")) return;
+  const p = progressSheet("Bringing over your items");
+  try { await importLegacy(S.hid, t => p.set(t)); toast("Your old items are here"); }
+  catch (e) { console.error(e); toast(e && e.code === "permission-denied" ? "The old data isn't readable. Make sure the newest security rules are published." : "Couldn't copy everything. Try again."); }
+  finally { p.close(); }
+}
+
 async function deleteHouseholdData(hid, report) {
   const base = ["households", hid];
   const ops = [];
@@ -910,6 +918,7 @@ function renderFamily() {
     h("div", { class: "lmeta", text: `Signed in as ${S.user.email || myName()}${S.admin ? " · Admin" : ""}` }),
     h("div", { class: "menu", style: "margin-top:12px" },
       h("button", { class: "btn", text: "🛡️  Run security check", onclick: runSecurityCheck }),
+      S.admin ? h("button", { class: "btn", text: "📥  Bring over old items", onclick: importOldFlow }) : null,
       h("button", { class: "btn", text: "🆔  Copy my account ID", onclick: () => { try { navigator.clipboard.writeText(uid()); toast("Account ID copied"); } catch (e) { toast(uid()); } } }),
       h("button", { class: "btn", text: "↩️  Sign out", onclick: doSignOut }),
       owner ? h("button", { class: "btn danger", text: "🗑  Delete this household", onclick: deleteHouseholdFlow })
@@ -997,8 +1006,8 @@ async function runSecurityCheck() {
   const rid = () => doc(collection(db, "x")).id;
   const tests = [
     { t: "Your own household works", expect: "ok", run: () => getDocFromServer(doc(db, "households", S.hid)) },
-    { t: "Old public data is locked", expect: "deny", run: () => getDocsFromServer(query(collection(db, "inventory"), limit(1))),
-      tip: "Publish the security rules (setup step 5)." },
+    ...(S.admin ? [] : [{ t: "Old public data is locked", expect: "deny", run: () => getDocsFromServer(query(collection(db, "inventory"), limit(1))),
+      tip: "Publish the security rules (setup step 5)." }]),
     { t: "Other households are private", expect: "deny", run: () => getDocFromServer(doc(db, "households", rid())) },
     { t: "Can't sneak into another household", expect: "deny", run: () => setDoc(doc(db, "households", rid(), "members", uid()), { role: "owner", name: "x", joinedAt: Date.now() }) },
     { t: "Other people's accounts are private", expect: "deny", run: () => getDocFromServer(doc(db, "users", rid())) },
