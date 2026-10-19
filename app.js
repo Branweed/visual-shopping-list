@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=57";
-import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=57";
-import { MEAL_VERSIONS } from "./meal-versions.js?v=57";
-import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=57";
-import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=57";
+import { MORE_MEALS } from "./meals-more.js?v=58";
+import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=58";
+import { MEAL_VERSIONS } from "./meal-versions.js?v=58";
+import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=58";
+import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=58";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -211,7 +211,7 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-57";
+const APP_VERSION = "2026.10.18-58";
 const RULES_VERSION = "v18";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -3832,16 +3832,35 @@ function receiptReview(found, storeHint, info) {
   const rows = found.map(f => ({ text: f.text, price: f.price, qty: f.qty || 1, per: f.per || "", lbs: f.lbs || 0, deal: f.deal || "", storePacked: !!f.storePacked,
     total: f.total || f.price, match: null, picked: false, on: false }));
   const changed = r => !!r.match && (priceNum(r.match.price) !== priceNum(r.price) || (r.per === "lb") !== isPerLb(r.match));
+  // A by-the-pound item on a line with no weight: the amount is the package total, not the price per lb. Ask for the weight.
+  const askWeight = r => !!r.match && isPerLb(r.match) && r.per !== "lb";
+  const settle = r => { r.on = askWeight(r) ? false : changed(r); };
   const matchAll = () => rows.forEach(r => {
     if (r.picked) return;
     const m = store ? preferStore(localMatch(r.text, store), store) : null;
     r.match = m && m.store === store ? m : null;
-    r.on = changed(r);
+    settle(r);
   });
+  const setWeight = (r, lbs) => {
+    const t = parseFloat(r.total);
+    if (!(lbs > 0) || !(t > 0)) return false;
+    r.per = "lb"; r.lbs = Math.round(lbs * 1000) / 1000; r.qty = 1; r.deal = "";
+    r.price = (t / lbs).toFixed(2); r.on = changed(r);
+    return true;
+  };
   // two receipt lines can't both update one item (e.g. two sizes of the same juice): only the first counts
   const dupOf = r => r.match && rows.find(x => x !== r && x.match && x.match.id === r.match.id && x.on && rows.indexOf(x) < rows.indexOf(r));
   const dedupe = () => rows.forEach(r => { if (r.on && dupOf(r)) r.on = false; });
   matchAll(); dedupe();
+  function weightAsk(r) {
+    const lb = h("input", { type: "text", inputmode: "decimal", placeholder: "lb", "aria-label": `Weight of ${r.match.name} in pounds`, style: "width:5.5em" });
+    const use = () => { if (setWeight(r, parseFloat(String(lb.value).replace(",", ".")))) { dedupe(); draw(); } else lb.focus(); };
+    lb.addEventListener("keydown", e => { if (e.key === "Enter") use(); });
+    return h("div", { class: "sr-status sr-warn wask" },
+      h("div", {}, "⚖️ ", h("b", { text: r.match.name }), ` is sold by the pound, but this line has no weight. What did the package weigh?`),
+      h("div", { class: "wask-row" }, lb, h("button", { class: "btn", type: "button", text: "Use weight", onclick: use }),
+        h("button", { class: "link", type: "button", text: `$${r.total} is the price per lb`, onclick: () => { setWeight(r, 1); r.lbs = 0; draw(); } })));
+  }
   const s = openSheet("Receipt");
   const draw = () => {
     if (s.closed) return;
@@ -3866,23 +3885,25 @@ function receiptReview(found, storeHint, info) {
         est && tot > 0 ? h("div", { class: "sr-status " + (tot <= est.total ? "sr-ok" : "sr-new"), text: `${est.label} estimated ${money(est.total)}, you spent ${money(tot)} (${tot >= est.total ? "+" : "−"}${money(Math.abs(tot - est.total))}).` }) : null),
       rows.map(r => {
         const m = r.match, old = m ? priceNum(m.price) : null, same = m && !changed(r);
-        const how = r.per ? `${fmtLbs(r.lbs)} lb @ $${r.price}/lb = $${r.total}` : r.deal ? `${r.qty} @ ${r.deal} → $${r.price} each` : r.qty > 1 ? `${r.qty} @ $${r.price} each` : "";
-        return h("div", { class: "sr" + (r.on ? "" : " off") },
-          h("input", { type: "checkbox", class: "sr-on", checked: r.on, disabled: !m, "aria-label": "Update " + r.text, onchange: e => { r.on = e.target.checked; if (r.on) rows.forEach(x => { if (x !== r && x.on && x.match && r.match && x.match.id === r.match.id) x.on = false; }); draw(); } }),
+        const how = r.per ? (r.lbs ? `${fmtLbs(r.lbs)} lb @ $${r.price}/lb = $${r.total}` : `$${r.price} per lb`) : r.deal ? `${r.qty} @ ${r.deal} → $${r.price} each` : r.qty > 1 ? `${r.qty} @ $${r.price} each` : "";
+        return h("div", { class: "sr" + (r.on || askWeight(r) ? "" : " off") },
+          h("input", { type: "checkbox", class: "sr-on", checked: r.on, disabled: !m || askWeight(r), "aria-label": "Update " + r.text, onchange: e => { r.on = e.target.checked; if (r.on) rows.forEach(x => { if (x !== r && x.on && x.match && r.match && x.match.id === r.match.id) x.on = false; }); draw(); } }),
           m ? thumbEl(m.image, "thumb") : h("div", { class: "thumb ph", text: "🧾" }),
           h("div", { class: "sr-main" },
             h("div", { class: "rc-line" }, h("span", { class: "rc-desc", text: r.text }), h("b", { text: "$" + r.total })),
             how ? h("div", { class: "lmeta", text: how }) : null,
             r.storePacked ? h("div", { class: "lmeta", text: "⚖️ Weighed and packed in the store, so the price changes with each package." }) : null,
+            m && askWeight(r) ? weightAsk(r) :
             m && dupOf(r) ? h("div", { class: "sr-status sr-warn", text: `Same item as a line above (${m.name}). Tap “Change match” if it's a different size.` }) :
             m ? h("div", { class: "sr-status " + (same ? "sr-ok" : "sr-new") }, (same ? "✓ " : "→ "), h("b", { text: m.name }),
-                  same ? " · price is up to date" : ` · ${old != null ? priceText(m) : "no price"} → $${r.price}${r.per ? "/lb" : ""}`)
+                  same ? " · price is up to date" : ` · ${old != null ? priceText(m) : "no price"} → $${r.price}${r.per ? "/lb" : ""}`,
+                  r.per === "lb" && !isPerLb(m) ? h("b", { text: " · now sold per lb" }) : null)
               : h("div", { class: "sr-status sr-warn", text: "Not matched to an item" }),
             h("div", { class: "sr-tools" },
               h("button", { class: "link", type: "button", text: m ? "Change match" : "Find a match", onclick: async () => {
                 const it = await pickItem(r.text, store);
                 if (it === undefined) return;
-                r.match = it; r.picked = true; r.on = changed(r); dedupe(); draw();
+                r.match = it; r.picked = true; settle(r); dedupe(); draw();
               } }))));
       }),
       !S.admin && n ? h("label", { class: "check" }, h("input", { type: "checkbox", checked: tellAdmin, onchange: e => { tellAdmin = e.target.checked; } }), "Also send these prices to the admin") : null,
@@ -3904,7 +3925,7 @@ function receiptReview(found, storeHint, info) {
     if (store) notePurchases(rows.filter(r => r.match && !dupOf(r)).map(r => ({ name: r.match.name, store, inv: r.match.id })), store, trip.d);
     const seen = rows.filter(r => r.match && !dupOf(r) && (r.on || !changed(r)));
     const jumps = await recordPrices(seen.map(r => ({ name: r.match.name, store, price: r.price, per: r.per === "lb" ? "lb" : (isPerLb(r.match) ? "lb" : ""), src: "receipt",
-      was: r.match.store === store ? r.match.price : "", wasAt: r.match.updatedAt || r.match.createdAt })));
+      was: r.match.store === store && (r.per === "lb") === isPerLb(r.match) ? r.match.price : "", wasAt: r.match.updatedAt || r.match.createdAt })));
     learnAliases(rows.filter(r => r.match).map(r => [r.text, r.match]));
     if (store) lsSet("lastStore", store);
     if (!pick.length) { s.close(); jumpsToast(tripMsg, jumps); return; }
