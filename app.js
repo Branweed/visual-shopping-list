@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=53";
-import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=53";
-import { MEAL_VERSIONS } from "./meal-versions.js?v=53";
-import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=53";
-import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=53";
+import { MORE_MEALS } from "./meals-more.js?v=54";
+import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=54";
+import { MEAL_VERSIONS } from "./meal-versions.js?v=54";
+import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=54";
+import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=54";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -210,8 +210,8 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-53";
-const RULES_VERSION = "v15";   // must match the _rules/{v} line in firestore.rules
+const APP_VERSION = "2026.10.18-54";
+const RULES_VERSION = "v16";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
   try { await getDocFromServer(doc(db, "_rules", RULES_VERSION)); return true; }
@@ -857,6 +857,8 @@ function subscribeAll() {
     if (S.tab === "create" && !(document.activeElement && document.activeElement.closest && document.activeElement.closest("#cookBody"))) renderCook();
   }, e => { console.warn("pantry", e); S.ready.pantry = true; renderPantry(); }));
 
+  nutUploaded = false;
+  subs.push(onSnapshot(nutCol(), { includeMetadataChanges: true }, nutFromCloud, e => { console.warn("label sync", e); }));
   subs.push(onSnapshot(priceCol(), snap => {
     S.prices = new Map(snap.docs.map(d => [d.id, { ...d.data(), id: d.id }]));
     if (S.ready.items && S.tab === "list") renderList();
@@ -1063,7 +1065,7 @@ async function deleteAccountFlow() {
       else { try { await deleteDoc(doc(db, "households", hid, "members", uid())); } catch (e) {} }
     }
     p.set("Removing your account…");
-    for (const c of ["myItems", "recipes", "prices", "aisleMaps"]) {
+    for (const c of ["myItems", "recipes", "prices", "aisleMaps", "nutrition"]) {
       try { const snap = await getDocsFromServer(collection(db, "users", uid(), c)); await commitOps(snap.docs.map(d => b => b.delete(d.ref))); } catch (e) { console.warn(c, e); }
     }
     try { const rq = await getDocsFromServer(query(collection(db, "requests"), where("by", "==", uid()))); await commitOps(rq.docs.map(d => b => b.delete(d.ref))); } catch (e) { console.warn("requests", e); }
@@ -1351,6 +1353,7 @@ async function runSecurityCheck() {
     ...(S.admin || !S.catalog.length ? [] : [{ t: "Only the admin can change the main list", expect: "deny", run: () => updateDoc(sdoc("inventory", S.catalog[0].id), { updatedAt: Date.now() }) }]),
     { t: "Other people's private edits are private", expect: "deny", run: () => getDocFromServer(doc(db, "users", rid(), "myItems", "x")) },
     { t: "Other people's price history is private", expect: "deny", run: () => getDocFromServer(doc(db, "users", rid(), "prices", "milk")) },
+    { t: "Other people's label nutrition is private", expect: "deny", run: () => getDocFromServer(doc(db, "users", rid(), "nutrition", "u0123456789")) },
     { t: "Other households' pantries are private", expect: "deny", run: () => getDocsFromServer(query(collection(db, "households", rid(), "pantry"), limit(1))) },
     { t: "Your pantry works", expect: "ok", run: () => getDocsFromServer(query(pantryCol(), limit(1))),
       tip: "Publish the newest security rules (they add the pantry)." },
@@ -3287,7 +3290,40 @@ async function lookupBarcode(code) {
 const NUT_FIELDS = "product_name,brands,nutriments,serving_size,allergens_tags,labels_tags,nutriscore_grade,nova_group";
 let nutVer = 0;
 function nutCached(key) { try { const v = lsGet("nut:" + key); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
-function nutSave(key, v) { lsSet("nut:" + key, JSON.stringify(v)); nutVer++; }
+function nutSave(key, v) { lsSet("nut:" + key, JSON.stringify(v)); nutVer++; if (v && v.src === "label") nutPush(key, v); }
+// Label-photo nutrition also goes to your account (users/{me}/nutrition), so every phone you sign in on has it.
+// Barcode lookups aren't synced: any device can fetch those for free. Needs firestore.rules v16.
+const nutDocId = key => key.startsWith("id:") ? "i" + key.slice(3) : "u" + key;
+const nutKeyOf = id => id[0] === "i" ? "id:" + id.slice(1) : id.slice(1);
+const nutIdOk = id => /^[ui][A-Za-z0-9_-]{1,60}$/.test(id);
+const nutCol = () => collection(db, "users", uid(), "nutrition");
+function nutPush(key, v) {
+  const id = nutDocId(key), json = JSON.stringify(v);
+  if (!uid() || !nutIdOk(id) || json.length > 4000) return;
+  setDoc(doc(nutCol(), id), { v: json, t: v.t || Date.now() }).catch(e => console.warn("label sync", e));
+}
+let nutUploaded = false;
+function nutFromCloud(snap) {
+  let ch = 0;
+  snap.docs.forEach(d => {
+    const key = nutKeyOf(d.id), x = d.data(), old = nutCached(key);
+    if (old && old.src === "label" && (old.t || 0) >= (x.t || 0)) return;
+    let v; try { v = JSON.parse(x.v); } catch (e) { return; }
+    lsSet("nut:" + key, JSON.stringify(old ? { ...old, ...v } : v)); ch++;
+  });
+  // First time on this phone: send up any label photos it read before syncing existed.
+  if (!nutUploaded && !snap.metadata.fromCache) {
+    nutUploaded = true;
+    const have = new Set(snap.docs.map(d => d.id)), pre = lsKey("nut:");
+    try {
+      Object.keys(localStorage).filter(k => k.startsWith(pre)).forEach(k => {
+        const key = k.slice(pre.length), v = nutCached(key);
+        if (v && v.src === "label" && !have.has(nutDocId(key))) nutPush(key, v);
+      });
+    } catch (e) {}
+  }
+  if (ch) { nutVer++; if (S.tab === "create" && !(document.activeElement && document.activeElement.closest && document.activeElement.closest("#cookBody"))) renderCook(); }
+}
 const numOr = x => typeof x === "number" && isFinite(x) ? x : typeof x === "string" && x.trim() !== "" && isFinite(+x) ? +x : null;
 const nutOfItem = i => (i.upc && nutCached(normUpc(i.upc))) || nutCached("id:" + i.id) || null;
 const NUT_FRESH = 30 * 864e5;
