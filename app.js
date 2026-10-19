@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=49";
-import { MEAL_VERSIONS } from "./meal-versions.js?v=49";
-import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=49";
-import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=49";
+import { MORE_MEALS } from "./meals-more.js?v=50";
+import { MEAL_VERSIONS } from "./meal-versions.js?v=50";
+import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=50";
+import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=50";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -209,7 +209,7 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-49";
+const APP_VERSION = "2026.10.18-50";
 const RULES_VERSION = "v15";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -3428,6 +3428,8 @@ function labelsCard() {
   if (!scanned.length) return null;
   const host = h("div", { class: "card nutcard" });
   const draw = (prog) => {
+    const wasOpen = !!host.querySelector("details[open]");
+    host.textContent = "";   // redraw in place: put() only adds, so clear first or the card repeats itself
     const withNut = scanned.filter(i => (nutOfItem(i) || {}).per100);
     const missing = scanned.filter(i => { const v = nutOfItem(i); return v && !v.per100; });
     const waiting = scanned.length - withNut.length - missing.length;
@@ -3435,7 +3437,7 @@ function labelsCard() {
       h("h2", { text: "📊 Nutrition from your barcodes" }),
       h("p", { class: "lmeta", text: `${withNut.length} of ${scanned.length} scanned products have nutrition facts. Recipes that use them show real numbers instead of estimates.` }),
       prog ? h("p", { class: "lmeta", text: `Checking the free product database… ${prog}` }) : waiting ? h("p", { class: "lmeta", text: `${waiting} still to check.` }) : null,
-      missing.length ? h("details", {}, h("summary", { text: `${missing.length} product${missing.length === 1 ? "" : "s"} not in the database: add a label photo` }),
+      missing.length ? h("details", wasOpen ? { open: "" } : {}, h("summary", { text: `${missing.length} product${missing.length === 1 ? "" : "s"} not in the database: add a label photo` }),
         h("div", { class: "nutmiss" }, missing.slice(0, 60).map(i => h("div", { class: "srow" },
           h("div", { class: "sn", text: i.name }),
           h("button", { class: "btn small", type: "button", text: "📷 Label", onclick: async () => { if (await readNutritionLabel(i)) draw(); } }))))) : null,
