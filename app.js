@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=45";
+import { MORE_MEALS } from "./meals-more.js?v=46";
+import { MEAL_VERSIONS } from "./meal-versions.js?v=46";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -188,7 +189,7 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-45";
+const APP_VERSION = "2026.10.18-46";
 const RULES_VERSION = "v15";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -3795,11 +3796,68 @@ async function updateRecipe(base, draft) {
   } finally { p.close(); }
 }
 
+/* ---------- quick swaps: one-for-one ingredients that cook the same way, so no AI is needed ---------- */
+// Each group: [ingredient name to use, what it matches in a recipe, how the steps say it, word to use in the steps].
+// A swap changes the ingredient and the wording in the steps; a note adds a step when something needs extra care.
+const QUICK_SWAPS = [
+  { items: [
+    ["Ground beef", /^ground beef\b/i, /\bbeef\b(?! (broth|stock))/gi, "beef"], ["Ground turkey", /^ground turkey\b/i, /\bturkey\b/gi, "turkey", "Cook ground turkey until 165°F in the center."],
+    ["Ground chicken", /^ground chicken\b/i, /\bchicken\b(?! (broth|stock))/gi, "chicken", "Cook ground chicken until 165°F in the center."],
+    ["Ground pork", /^ground pork\b/i, /\bpork\b/gi, "pork", "Cook ground pork until no pink remains (160°F)."],
+    ["Plant-based ground", /^plant-based ground/i, /\bplant-based ground\b/gi, "plant-based ground", "Plant-based ground cooks faster than meat; follow its package and don't drain it."]] },
+  { note: "Cook chicken until 165°F inside.", items: [["Boneless chicken breasts", /^boneless chicken breasts?$/i], ["Boneless chicken thighs", /^boneless chicken thighs?$/i]] },
+  { items: [["Cod fillets", /\bcod\b/i, /\bcod\b/gi, "cod"], ["Haddock fillets", /\bhaddock\b/i, /\bhaddock\b/gi, "haddock"],
+    ["Pollock fillets", /\bpollock\b/i, /\bpollock\b/gi, "pollock"], ["Tilapia fillets", /\btilapia\b/i, /\btilapia\b/gi, "tilapia"]] },
+  { items: [["Shredded cheddar cheese", /cheddar/i], ["Shredded Monterey Jack cheese", /monterey jack/i], ["Shredded pepper jack cheese", /pepper jack/i],
+    ["Shredded Mexican cheese blend", /mexican cheese|^shredded cheese$/i]] },
+  { items: [["Mozzarella cheese", /mozzarella/i, /\bmozzarella\b/gi, "mozzarella"], ["Provolone cheese", /provolone/i, /\bprovolone\b/gi, "provolone"]] },
+  { items: [["Parmesan cheese", /^parmesan/i, /\bparmesan\b/gi, "Parmesan"], ["Pecorino Romano cheese", /^pecorino/i, /\bpecorino( romano)?\b/gi, "Pecorino"]] },
+  { items: [["Sour cream", /^sour cream$/i, /\bsour cream\b/gi, "sour cream"], ["Plain Greek yogurt", /^(plain )?greek yogurt$/i, /\b(greek )?yogurt\b/gi, "Greek yogurt"]] },
+  { items: [["Soy sauce", /^soy sauce$/i, /\bsoy sauce\b/gi, "soy sauce"], ["Tamari (gluten-free)", /^tamari/i, /\btamari\b/gi, "tamari"],
+    ["Coconut aminos", /^coconut aminos$/i, /\bcoconut aminos\b/gi, "coconut aminos"]] },
+  { items: [["Milk", /^(whole |2% )?milk$/i, /(?<!(coconut|oat|almond) )\bmilk\b/gi, "milk"], ["Oat milk", /^oat milk$/i, /\boat milk\b/gi, "oat milk"],
+    ["Unsweetened almond milk", /almond milk$/i, /\balmond milk\b/gi, "almond milk"]] },
+  { items: [["Chicken broth", /^chicken (broth|stock)$/i, /\bchicken (broth|stock)\b/gi, "chicken broth"], ["Vegetable broth", /^vegetable (broth|stock)$/i, /\bvegetable (broth|stock)\b/gi, "vegetable broth"]] },
+  { items: [["Breadcrumbs", /^(plain |italian )?breadcrumbs$/i, /\bbreadcrumbs\b/gi, "breadcrumbs"], ["Panko breadcrumbs", /^panko/i, /\bpanko\b/gi, "panko"],
+    ["Gluten-free breadcrumbs", /^gluten-free breadcrumbs$/i, /\bgluten-free breadcrumbs\b/gi, "gluten-free breadcrumbs"]] },
+  { items: [["Flour tortillas", /^flour tortillas$/i], ["Corn tortillas", /^corn tortillas$/i], ["Whole wheat tortillas", /^whole wheat tortillas$/i]] },
+  { time: true, items: ["Spaghetti", "Linguine", "Fettuccine", "Penne", "Rigatoni", "Rotini", "Bucatini"]
+      .map(n => [n, new RegExp("^" + n + "$", "i"), new RegExp("\\b" + n + "\\b", "gi"), n.toLowerCase()])
+      .concat([["Gluten-free pasta", /^gluten-free pasta$/i, /\bgluten-free pasta\b/gi, "gluten-free pasta"], ["Whole wheat pasta", /^whole wheat pasta$/i, /\bwhole wheat pasta\b/gi, "whole wheat pasta"]]) },
+  { items: [["White rice", /^(white )?rice$/i], ["Jasmine rice", /^jasmine rice$/i], ["Basmati rice", /^basmati rice$/i]] },
+  { items: [["Lemon", /^lemons?$/i, /\blemons?\b/gi, "lemon"], ["Lime", /^limes?$/i, /\blimes?\b/gi, "lime"]] },
+  { items: [["Fresh cilantro", /^(fresh )?cilantro$/i, /\bcilantro\b/gi, "cilantro"], ["Fresh parsley", /^(fresh )?parsley$/i, /\bparsley\b/gi, "parsley"]] },
+  { items: [["Honey", /^honey$/i, /\bhoney\b/gi, "honey"], ["Maple syrup", /^maple syrup$/i, /\bmaple syrup\b/gi, "maple syrup"]] },
+  { savory: true, note: "Keep half-and-half at a gentle simmer so it doesn't split.", items: [["Heavy cream", /^heavy cream$/i, /(?<!(sour|ice|cashew) )\b(heavy )?cream\b/gi, "cream"],
+    ["Half-and-half", /^half-and-half$/i, /\bhalf-and-half\b/gi, "half-and-half"]] },
+  { items: [["Bacon", /^bacon$/i, /\bbacon\b/gi, "bacon"], ["Turkey bacon", /^turkey bacon$/i, /\bturkey bacon\b/gi, "turkey bacon"]] },
+  { items: [["Kielbasa", /kielbasa/i, /\bkielbasa\b/gi, "kielbasa"], ["Smoked sausage", /^smoked sausage/i, /\bsmoked sausage\b/gi, "smoked sausage"],
+    ["Andouille sausage", /andouille/i, /\bandouille\b/gi, "andouille"]] }
+].map(g => ({ ...g, items: g.items.map(([label, re, step, word, note]) => ({ label, re, step, word, note: note || g.note, time: g.time })) }));
+function swapChoices(item, r) {
+  for (const g of QUICK_SWAPS) {
+    if (g.savory && r && r.type === "dessert") continue;
+    const from = g.items.find(x => x.re.test(item));
+    if (from) return { from, to: g.items.filter(x => x !== from) };
+  }
+  return null;
+}
+const keepCase = (was, word) => /^[A-Z]/.test(was) ? word.charAt(0).toUpperCase() + word.slice(1) : word;
+function quickSwap(r, k, from, to) {
+  const fix = t => from.step && to.word ? t.replace(from.step, w => keepCase(w, to.word)) : t;
+  // Different pasta shapes cook for different times: point to the package instead of the old number.
+  const steps = r.steps.map(fix).map(t => to.time && to.word && t.toLowerCase().includes(to.word.toLowerCase())
+    ? t.replace(/\bfor (about )?\d+( to \d+)? minutes\b/i, "for the time on the package") : t);
+  if (to.note && !steps.includes(to.note)) steps.push(to.note);
+  return { ...r, name: fix(r.name), steps, ingredients: r.ingredients.map((x, j) => j === k ? { ...x, item: to.label, have: iHave(to.label) } : x) };
+}
+
 function openRecipe(r0) {
   let r = r0;                         // the recipe as it is now
   let draft = null;                   // pending edits, or null
   const s = openSheet(r.name);
   const body = h("div");
+  const pickVersion = k => { r = r.variants.make(k, r.serves || 4); draft = null; s.setTitle && s.setTitle(r.name); draw(); };
   s.body.append(body);
   const startDraft = () => { if (!draft) draft = { serves: r.serves || 2, ingredients: r.ingredients.map(i => ({ ...i })), note: "" }; };
   const changed = () => draft && (draft.serves !== (r.serves || 2) || draft.note.trim() ||
@@ -3860,6 +3918,9 @@ function openRecipe(r0) {
       h("div", { class: "rmeta" },
         r.type ? h("span", { class: "rtag", text: r.type }) : null,
         r.minutes ? h("span", { text: `${fmtMins(r.minutes)} cooking` }) : null),
+      r.variants ? h("div", { class: "fchips vchips", role: "group", "aria-label": "Version" }, r.variants.list.map(x =>
+        h("button", { type: "button", class: "fchip" + (x.k === r.variants.cur ? " on" : ""), "aria-pressed": String(x.k === r.variants.cur),
+          onclick: () => x.k !== r.variants.cur && pickVersion(x.k) }, `${x.e} ${x.label}`))) : null,
       r.waitMinutes ? h("div", { class: "rwait" }, h("b", { text: "⏳ Plan ahead" }), h("span", { text: waitText(r) + (r.waitNote && !/\d/.test(r.waitNote) ? ` (about ${fmtMins(r.waitMinutes)})` : "") })) : null,
       r.summary ? h("p", { class: "msg", text: r.summary }) : null,
       h("div", { class: "actions rtop" },
@@ -3879,6 +3940,17 @@ function openRecipe(r0) {
         const st = stOf(i);
         return h("li", { class: st === "need" ? "miss" : "" },
           h("button", { type: "button", class: "ingname", "aria-label": "Swap " + i.item, onclick: async () => {
+            const sw = swapChoices(i.item, r);
+            if (sw) {
+              const c = await choose(`Swap ${i.item}`, "Pick one and the steps update to match. No waiting.",
+                [...sw.to.map(t => ({ label: t.label, value: t })), { label: "Something else…", value: "other" }, { label: "Cancel", value: null }]);
+              if (!c) return;
+              if (c !== "other") {
+                if (draft) { draft.ingredients[k] = { ...draft.ingredients[k], item: c.label, have: iHave(c.label) }; }
+                else r = quickSwap(r, k, sw.from, c);
+                draw(); toast(`Swapped in ${c.label}`); return;
+              }
+            }
             const v = await promptSheet("Swap ingredient", `Use instead of ${i.item}`, i.item, "Swap", { max: 60 });
             if (!v || v === i.item) return;
             startDraft(); draft.ingredients[k] = { item: v, amount: draft.ingredients[k].amount, have: iHave(v) }; draw();
@@ -4044,7 +4116,7 @@ const MEAL_REGROUP = { "Teriyaki Chicken": "japanese", "General Tso's Chicken": 
   "Thai Red Curry Chicken": "thai", "Sweet & Sour Pork": "chinese", "Chicken Lo Mein": "chinese" };
 // Extra categories for the older built-in meals (newer ones carry t: in meals-more.js).
 const MEAL_TAGS = {
-  "Beef Tacos": "mexican kids budget", "Pot Roast": "comfort onepot fall winter", "Beef Stew": "comfort onepot fall winter", "Chicken & Chouriço": "onepot",
+  "Beef Tacos": "mexican kids budget", "Pot Roast": "comfort onepot slow fall winter", "Beef Stew": "comfort onepot fall winter", "Chicken & Chouriço": "onepot",
   "Portuguese Kale Soup": "soups budget onepot fall winter", "Spaghetti & Meatballs": "italian kids comfort", "Chili": "onepot budget comfort fall winter",
   "Chicken Parm": "italian kids", "Shepherd's Pie": "comfort winter", "Chicken Stir-Fry": "chinese", "Baked Ziti": "italian kids budget",
   "Burgers": "grill kids sandwiches summer", "Steak Tips": "grill summer", "Meatloaf": "comfort kids", "Beef & Broccoli": "chinese", "Stuffed Peppers": "comfort",
@@ -4063,7 +4135,7 @@ const MEAL_REGIONS = {
     "Pork Chops & Apples", "Chicken Pot Pie", "Pumpkin Pie"],
   midatlantic: ["Philly Cheesesteaks", "Reuben Sandwiches", "Buffalo Chicken Wraps", "Buffalo Chicken Salad", "Eggs Benedict", "Chicken Parm", "Baked Ziti"],
   south: ["BBQ Chicken Thighs", "Pulled Pork", "Baked Mac & Cheese", "Blueberry Cobbler", "Banana Bread", "Strawberry Shortcake", "Chicken Salad Sandwiches"],
-  midwest: ["Meatloaf", "Italian Beef Sandwiches", "Sloppy Joes", "Slow Cooker Swedish Meatballs", "Kielbasa, Cabbage & Potatoes", "Slow Cooker Pot Roast", "Slow Cooker Beef Stroganoff",
+  midwest: ["Meatloaf", "Italian Beef Sandwiches", "Sloppy Joes", "Slow Cooker Swedish Meatballs", "Kielbasa, Cabbage & Potatoes", "Slow Cooker Beef Stroganoff",
     "Chocolate Sheet Cake", "Homemade Pizza"],
   southwest: ["Chili", "Slow Cooker White Chicken Chili", "Beef Burrito Bowls", "Chicken Fajitas", "Taco Salad", "Sheet Pan Chicken Nachos", "Breakfast Burritos", "Grilled Ribeye Steaks"],
   west: ["Cobb Salad", "French Dip Sandwiches", "Fish Tacos", "Chicken Caesar Salad", "Garlic Butter Salmon", "Strawberry Spinach Salad with Chicken"],
@@ -4493,7 +4565,22 @@ const QUICK_MEALS = [
     steps: ["Whisk the eggs, milk, cinnamon, vanilla and sugar.", "Dip each slice for 10 seconds per side.", "Cook in butter over medium heat for 3 minutes per side until golden. Serve with syrup."] }
 
 , ...MORE_MEALS].map(m => ({ ...m, g: MEAL_REGROUP[m.name] || m.g, t: [m.t || "", MEAL_TAGS[m.name] || "", REGION_OF[m.name] || ""].join(" ").trim(),
-  id: "q-" + slug(m.name), quick: true, ingredients: m.ingredients.map(([item, amount]) => ({ item, amount, have: false })) }));
+  id: "q-" + slug(m.name), quick: true, v: MEAL_VERSIONS[m.name] || null, ingredients: m.ingredients.map(([item, amount]) => ({ item, amount, have: false })) }));
+// One version of a meal (see meal-versions.js): the base recipe with that version's swaps, extra ingredients and rewritten steps.
+// Versions always start from the built-in recipe, even when you've saved your own copy of the base.
+function mealVersion(m, k) {
+  const src = m.vbase || m, V = src.v, ver = k && V ? V.v.find(x => x.k === k) : null;
+  if (!ver) return m;
+  const own = (o, key) => o && Object.prototype.hasOwnProperty.call(o, key);
+  let ingredients = ver.ingredients ? ver.ingredients.map(([item, amount]) => ({ item, amount, have: false }))
+    : src.ingredients.flatMap(i => !own(ver.swap, i.item) ? [i] : ver.swap[i.item] ? [{ item: ver.swap[i.item][0], amount: ver.swap[i.item][1], have: false }] : []);
+  if (ver.add) ingredients = ingredients.concat(ver.add.map(([item, amount]) => ({ item, amount, have: false })));
+  const steps = Array.isArray(ver.steps) ? ver.steps.slice() : src.steps.map((t, i) => own(ver.steps, i) ? ver.steps[i] : t).filter(t => t != null);
+  return { ...src, name: ver.name, id: src.id + "-" + ver.k, vk: ver.k, ingredients, steps, summary: ver.summary || src.summary,
+    minutes: own(ver, "minutes") ? ver.minutes : src.minutes, waitMinutes: own(ver, "waitMinutes") ? ver.waitMinutes : src.waitMinutes,
+    waitNote: own(ver, "waitNote") ? ver.waitNote : src.waitNote, savedQuick: false };
+}
+const mealVersionKeys = m => { const V = (m.vbase || m).v; return V ? V.v.map(x => x.k) : []; };
 const quickRecipe = m => ({ ...cleanIdea(m), ingredients: m.ingredients.map(i => ({ ...i, have: false })), quick: true, e: m.e });
 
 /* ---------- what's on hand: typed in, bought lately, or already on the shopping list ---------- */
@@ -4709,6 +4796,26 @@ const PROTEINS = {
 };
 const OTHER_MEAT = /\b(bacon|pancetta|pepperoni|turkey|lamb|anchov(y|ies)|salami|gelatin)\b/i;
 const mealTagCache = new WeakMap();
+function proteinsOf(m) {
+  const names = (m.ingredients || []).map(i => typeof i === "string" ? i : i.item || "");
+  const items = names.filter(x => !NOT_MEAT.test(x) && !/fish sauce|oyster sauce/i.test(x));
+  const keys = Object.entries(PROTEINS).filter(([, re]) => items.some(x => re.test(x))).map(([k]) => k);
+  const anyMeat = keys.length > 0 || items.some(x => OTHER_MEAT.test(x)) || names.some(x => /chicken broth|beef broth|chicken stock|beef stock/i.test(x));
+  return { keys, anyMeat };
+}
+// Opened from a protein (tile or chip), which version fits it? "" = the base recipe.
+function versionFor(m, prefer) {
+  const ks = mealVersionKeys(m);
+  if (!ks.length || !prefer.length) return "";
+  const direct = ks.find(k => prefer.includes(k));   // e.g. 🐢 Slow cooker opens Pot Roast's slow cooker version
+  if (direct) return direct;
+  prefer = prefer.filter(k => PROTEIN_KEYS.includes(k));
+  if (!prefer.length) return "";
+  const fits = mm => { const p = proteinsOf(mm); return prefer.every(k => k === "meatless" ? !p.anyMeat : p.keys.includes(k)); };
+  if (fits(m)) return "";
+  return ks.find(k => fits(mealVersion(m, k))) || "";
+}
+const PROTEIN_KEYS = ["beef", "chicken", "pork", "seafood", "meatless"];
 function mealGroups(m) {
   if (mealTagCache.has(m)) return mealTagCache.get(m);
   const out = new Set();
@@ -4723,11 +4830,10 @@ function mealGroups(m) {
   const sweet = m.type === "dessert" || m.g === "desserts", morning = m.type === "breakfast";
   if (!sweet && !morning && m.minutes && m.minutes <= 30 && !m.waitMinutes) out.add("quick");
   if (!sweet && !morning && m.g !== "mine") {
-    const items = (m.ingredients || []).map(i => typeof i === "string" ? i : i.item || "").filter(x => !NOT_MEAT.test(x) && !/fish sauce|oyster sauce/i.test(x));
-    let meat = false;
-    for (const [k, re] of Object.entries(PROTEINS)) if (items.some(x => re.test(x))) { out.add(k); meat = true; }
-    const anyMeat = meat || items.some(x => OTHER_MEAT.test(x)) || (m.ingredients || []).some(i => /chicken broth|beef broth|chicken stock|beef stock/i.test(typeof i === "string" ? i : i.item || ""));
-    if (anyMeat) out.delete("meatless"); else out.add("meatless");
+    // Every version counts: Tacos with a chicken version shows under 🐔 Chicken, and a bean version makes it Meatless too.
+    const all = [m, ...mealVersionKeys(m).map(k => mealVersion(m, k))].map(proteinsOf);
+    all.forEach(p => p.keys.forEach(k => out.add(k)));
+    if (all.some(p => !p.anyMeat)) out.add("meatless"); else out.delete("meatless");
   }
   const sz = seasonNow();
   if (out.has(sz) || SEASON_GROUPS[sz].some(k => out.has(k) && k === m.g)) out.add("season");
@@ -4809,14 +4915,15 @@ function allMeals() {
     const sv = byName.get(norm(m.name));
     if (!sv) return m;
     byName.delete(norm(m.name));
-    return { ...sv, e: m.e, g: m.g, savedQuick: true };
+    return { ...sv, e: m.e, g: m.g, t: m.t, savedQuick: true, vbase: m.v ? m : null };
   });
   byName.forEach(r => out.push({ ...r, e: "★", g: "mine" }));
   return out;
 }
-function mealTile(m) {
+function mealTile(m0, prefer = []) {
+  const vk = versionFor(m0, prefer), m = vk ? mealVersion(m0, vk) : m0;
   const n = m.ingredients.filter(i => ingStatus(typeof i === "string" ? i : i.item) === "need" && !STAPLES.has(norm(typeof i === "string" ? i : i.item))).length;
-  return h("button", { type: "button", class: "qtile", onclick: () => openMeal(m) },
+  return h("button", { type: "button", class: "qtile", onclick: () => openMeal(m0, vk) },
     h("span", { class: "qe", text: m.e || "★" }),
     h("span", { class: "qn", text: (m.savedQuick ? "★ " : "") + m.name }),
     h("span", { class: "qs" + (n ? "" : " ok"), text: n ? `Need ${n}` : "✓ Ready" }));
@@ -4839,7 +4946,7 @@ function openGroup(k) {
         chips.map(({ o, n }) => h("button", { type: "button", class: "fchip" + (picked.has(o.k) ? " on" : ""), "aria-pressed": String(picked.has(o.k)),
           onclick: () => { picked.has(o.k) ? picked.delete(o.k) : picked.add(o.k); draw(); } }, `${o.e} ${o.name}`, picked.has(o.k) ? "" : h("span", { class: "fn", text: String(n) })))) : null,
       picked.size ? h("p", { class: "lmeta", style: "margin:6px 2px 0", text: `${meals.length} of ${base.length} meals` }) : null,
-      meals.length ? h("div", { class: "qgrid" }, meals.map(m => mealTile(m)))
+      meals.length ? h("div", { class: "qgrid" }, meals.map(m => mealTile(m, [k, ...picked])))
         : h("div", { class: "empty small" }, h("b", { text: k === "mine" ? "No recipes of your own yet" : "Nothing here yet" }),
             k === "mine" ? "Add one from a photo, pasted text, or type it in. Tap ★ Save on any recipe to keep it here too." : "Recipes you add that fit here show up automatically."),
       h("button", { class: "btn block", type: "button", style: "margin-top:12px", text: "＋ Add a recipe", onclick: () => { s.close(); addRecipeFlow(); } }));
@@ -4857,8 +4964,9 @@ async function askPeople(current) {
 // 2 / 4 / 6 / 8, plus the number you used last if it's something else (like 5 or 12).
 const peopleOptions = last => [...new Set([...PEOPLE_CHOICES, ...(last && !PEOPLE_CHOICES.includes(last) ? [last] : [])])].sort((a, b) => a - b);
 // Tapping a meal: how many people? Then the recipe, sized for them (no AI).
-async function openMeal(m) {
-  const base = m.quick ? quickRecipe(m) : cleanIdea(m);
+async function openMeal(m, vk = "") {
+  const one = k => k ? quickRecipe(mealVersion(m, k)) : m.quick ? quickRecipe(m) : cleanIdea(m);
+  const base = one(vk);
   if (!base) return;
   const recipeServes = base.serves || 4;
   const last = +lsGet("people") || 0;
@@ -4870,7 +4978,11 @@ async function openMeal(m) {
   if (!n) return;
   lsSet("people", String(n));
   const f = n / recipeServes;
-  openRecipe({ ...base, serves: n, ingredients: base.ingredients.map(i => ({ ...i, amount: scaleAmount(i.amount, f) })) });
+  const sized = (b, people) => ({ ...b, serves: people, ingredients: b.ingredients.map(i => ({ ...i, amount: scaleAmount(i.amount, people / (b.serves || 4)) })) });
+  const V = (m.vbase || m).v;
+  const variants = V ? { cur: vk, list: [{ k: "", e: V.e, label: V.label }, ...V.v.map(x => ({ k: x.k, e: x.e, label: x.label }))],
+    make(k, people) { return { ...sized(one(k), people), variants: { ...variants, cur: k } }; } } : null;
+  openRecipe({ ...sized(base, n), variants });
 }
 
 /* ---------- your own recipes: photo, pasted text, or typed ---------- */
