@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=41";
+import { MORE_MEALS } from "./meals-more.js?v=42";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -188,7 +188,7 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-41";
+const APP_VERSION = "2026.10.18-42";
 const RULES_VERSION = "v15";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -4054,9 +4054,25 @@ const MEAL_TAGS = {
   "Lasagna": "italian comfort", "Chicken Noodle Soup": "comfort kids onepot winter", "New England Clam Chowder": "comfort winter", "Minestrone": "italian budget onepot",
   "Caçoila": "sandwiches", "Eggplant Parm": "italian", "Black Bean Quesadillas": "mexican kids budget", "Vegetable Fried Rice": "chinese budget",
   "Grilled Cheese & Tomato Soup": "sandwiches comfort kids budget soups winter", "Spinach & Ricotta Stuffed Shells": "italian pasta", "Chicken Tortilla Soup": "soups",
-  "Pork Chile Verde": "soups onepot", "Teriyaki Chicken": "kids", "Greek Chicken Souvlaki": "grill summer", "Chicken Shawarma": "sandwiches",
-  "Greek Lemon Chicken & Potatoes": "onepot", "Shakshuka": "onepot breakfast", "Falafel Pitas": "sandwiches", "Sausage & Egg Breakfast Casserole": "kids"
+  "Pork Chile Verde": "soups onepot", "Teriyaki Chicken": "kids", "Greek Chicken Souvlaki": "greek grill summer", "Moussaka": "greek comfort", "Chicken Shawarma": "sandwiches",
+  "Greek Lemon Chicken & Potatoes": "greek onepot", "Shakshuka": "onepot breakfast", "Falafel Pitas": "sandwiches", "Sausage & Egg Breakfast Casserole": "kids"
 };
+// American regions: these show as chips inside the 🇺🇸 American tile (Southern & Cajun meals count as The South automatically).
+const MEAL_REGIONS = {
+  newengland: ["New England Clam Chowder", "Baked Haddock", "Baked Stuffed Shrimp", "Seafood Casserole", "Steak Tips", "Pot Roast", "Apple Crisp", "Blueberry Muffins",
+    "Pork Chops & Apples", "Chicken Pot Pie", "Pumpkin Pie"],
+  midatlantic: ["Philly Cheesesteaks", "Reuben Sandwiches", "Buffalo Chicken Wraps", "Buffalo Chicken Salad", "Eggs Benedict", "Chicken Parm", "Baked Ziti"],
+  south: ["BBQ Chicken Thighs", "Pulled Pork", "Baked Mac & Cheese", "Blueberry Cobbler", "Banana Bread", "Strawberry Shortcake", "Chicken Salad Sandwiches"],
+  midwest: ["Meatloaf", "Italian Beef Sandwiches", "Sloppy Joes", "Slow Cooker Swedish Meatballs", "Kielbasa, Cabbage & Potatoes", "Slow Cooker Pot Roast", "Slow Cooker Beef Stroganoff",
+    "Chocolate Sheet Cake", "Homemade Pizza"],
+  southwest: ["Chili", "Slow Cooker White Chicken Chili", "Beef Burrito Bowls", "Chicken Fajitas", "Taco Salad", "Sheet Pan Chicken Nachos", "Breakfast Burritos", "Grilled Ribeye Steaks"],
+  west: ["Cobb Salad", "French Dip Sandwiches", "Fish Tacos", "Chicken Caesar Salad", "Garlic Butter Salmon", "Strawberry Spinach Salad with Chicken"],
+  hawaii: ["Teriyaki Chicken"],
+  american: ["Burgers", "Grilled Cheese & Tomato Soup", "Chicken Noodle Soup", "BLT Sandwiches", "Pancakes", "Bacon, Eggs & Home Fries", "Chocolate Chip Cookies",
+    "Fudgy Brownies", "Peanut Butter Cookies", "Homemade Chicken Tenders", "Western Omelette", "Split Pea Soup with Ham", "Sausage & Egg Breakfast Casserole"]
+};
+const REGION_OF = {};
+for (const [r, names] of Object.entries(MEAL_REGIONS)) names.forEach(n => { REGION_OF[n] = ((REGION_OF[n] || "") + " " + r).trim(); });
 const QUICK_MEALS = [
   { e: "🌮", g: "beef", name: "Beef Tacos", type: "dinner", minutes: 25, serves: 4, summary: "Seasoned ground beef in crunchy shells with all the toppings.",
     ingredients: [["Ground beef", "1 lb"], ["Taco shells", "12"], ["Taco seasoning", "1 packet"], ["Onion", "1 small"], ["Olive oil", "1 tsp"], ["Lettuce", "2 cups shredded"],
@@ -4476,7 +4492,7 @@ const QUICK_MEALS = [
     ingredients: [["Thick bread or Portuguese sweet bread", "8 slices"], ["Eggs", "4"], ["Milk", "1 cup"], ["Cinnamon", "1 tsp"], ["Vanilla", "1 tsp"], ["Sugar", "1 tbsp"], ["Butter", "2 tbsp"], ["Maple syrup", "to serve"]],
     steps: ["Whisk the eggs, milk, cinnamon, vanilla and sugar.", "Dip each slice for 10 seconds per side.", "Cook in butter over medium heat for 3 minutes per side until golden. Serve with syrup."] }
 
-, ...MORE_MEALS].map(m => ({ ...m, g: MEAL_REGROUP[m.name] || m.g, t: [m.t || "", MEAL_TAGS[m.name] || ""].join(" ").trim(),
+, ...MORE_MEALS].map(m => ({ ...m, g: MEAL_REGROUP[m.name] || m.g, t: [m.t || "", MEAL_TAGS[m.name] || "", REGION_OF[m.name] || ""].join(" ").trim(),
   id: "q-" + slug(m.name), quick: true, ingredients: m.ingredients.map(([item, amount]) => ({ item, amount, have: false })) }));
 const quickRecipe = m => ({ ...cleanIdea(m), ingredients: m.ingredients.map(i => ({ ...i, have: false })), quick: true, e: m.e });
 
@@ -4663,18 +4679,25 @@ const MEAL_GROUPS = [
   { k: "beef", s: "protein", e: "🐄", name: "Beef", a: "sway" }, { k: "chicken", s: "protein", e: "🐔", name: "Chicken", a: "peck" },
   { k: "pork", s: "protein", e: "🐷", name: "Pork & Sausage", a: "wiggle" }, { k: "seafood", s: "protein", e: "🐟", name: "Seafood", a: "fish" },
   { k: "meatless", s: "protein", e: "🥕", name: "Meatless", a: "hop" },
+  { k: "american", s: "world", e: "🇺🇸", name: "American", a: "wave" },
   { k: "portuguese", s: "world", e: "🇵🇹", name: "Portuguese", a: "wave" }, { k: "mexican", s: "world", e: "🇲🇽", name: "Mexican", a: "wave" },
   { k: "italian", s: "world", e: "🇮🇹", name: "Italian", a: "wave" }, { k: "chinese", s: "world", e: "🇨🇳", name: "Chinese", a: "wave" },
   { k: "japanese", s: "world", e: "🇯🇵", name: "Japanese", a: "wave" }, { k: "korean", s: "world", e: "🇰🇷", name: "Korean", a: "wave" },
   { k: "thai", s: "world", e: "🇹🇭", name: "Thai", a: "wave" }, { k: "indian", s: "world", e: "🇮🇳", name: "Indian", a: "wave" },
-  { k: "med", s: "world", e: "🫒", name: "Mediterranean", a: "hop" }, { k: "southern", s: "world", e: "🤠", name: "Southern & Cajun", a: "sway" },
+  { k: "greek", s: "world", e: "🇬🇷", name: "Greek", a: "wave" }, { k: "med", s: "world", e: "🫒", name: "Mediterranean", a: "hop" }, { k: "southern", s: "world", e: "🤠", name: "Southern & Cajun", a: "sway" },
   { k: "breakfast", s: "style", e: "🍳", name: "Breakfast", a: "flip" }, { k: "slow", s: "style", e: "🐢", name: "Slow cooker", a: "crawl" },
   { k: "onepot", s: "style", e: "🥘", name: "One-pot & sheet pan", a: "bubble" }, { k: "grill", s: "style", e: "🔥", name: "BBQ & grill", a: "flicker" },
   { k: "soups", s: "style", e: "🍲", name: "Soups & stews", a: "bubble" }, { k: "pasta", s: "style", e: "🍝", name: "Pasta", a: "twirl" },
   { k: "salads", s: "style", e: "🥗", name: "Salads", a: "toss" }, { k: "sandwiches", s: "style", e: "🥪", name: "Sandwiches & wraps", a: "hop" },
   { k: "comfort", s: "style", e: "🧸", name: "Comfort food", a: "hug" }, { k: "kids", s: "style", e: "🎈", name: "Kid favorites", a: "float" },
-  { k: "budget", s: "style", e: "🪙", name: "Budget meals", a: "spin" }, { k: "desserts", s: "style", e: "🧁", name: "Desserts", a: "hop" }
+  { k: "budget", s: "style", e: "🪙", name: "Budget meals", a: "spin" }, { k: "desserts", s: "style", e: "🧁", name: "Desserts", a: "hop" },
+  // American regions: no tile of their own, they're the chips inside 🇺🇸 American.
+  { k: "newengland", s: "region", e: "🦞", name: "New England" }, { k: "midatlantic", s: "region", e: "🗽", name: "Mid-Atlantic & NY" },
+  { k: "south", s: "region", e: "🍑", name: "The South" }, { k: "midwest", s: "region", e: "🌽", name: "Midwest" },
+  { k: "southwest", s: "region", e: "🌵", name: "Southwest & Texas" }, { k: "west", s: "region", e: "🌲", name: "West Coast & Northwest" },
+  { k: "hawaii", s: "region", e: "🌺", name: "Hawaii" }
 ];
+const REGION_KEYS = MEAL_GROUPS.filter(g => g.s === "region").map(g => g.k);
 // One home per meal, for lists that should show each meal once (like Plan the week).
 const mealHome = m => m.g === "mine" || !m.g ? "mine" : m.g === "breakfast" ? "breakfast" : (m.minutes && m.minutes <= 30 && !m.waitMinutes && m.type !== "dessert" ? "quick" : m.g);
 const NOT_MEAT = /\b(broth|stock|bouillon|soup mix|base)\b/i;
@@ -4693,6 +4716,8 @@ function mealGroups(m) {
   else {
     out.add(m.g);
     String(m.t || "").split(/\s+/).filter(Boolean).forEach(t => out.add(t));
+    if (out.has("southern")) out.add("south");
+    if (REGION_KEYS.some(r => out.has(r))) out.add("american");
     if (m.savedQuick) out.add("mine");   // a built-in meal you ★ saved shows in My recipes too
   }
   const sweet = m.type === "dessert" || m.g === "desserts", morning = m.type === "breakfast";
@@ -4765,7 +4790,8 @@ function openGroup(k) {
     s.body.textContent = "";
     const base = allMeals().filter(m => inGroup(m, k));
     const meals = base.filter(m => [...picked].every(p => inGroup(m, p)));
-    const chips = MEAL_GROUPS.filter(o => o.k !== k && o.k !== "mine").map(o => ({ o, n: meals.filter(m => inGroup(m, o.k)).length }))
+    const order = k === "american" ? [...MEAL_GROUPS.filter(o => o.s === "region"), ...MEAL_GROUPS.filter(o => o.s !== "region")] : MEAL_GROUPS.filter(o => o.s !== "region");
+    const chips = order.filter(o => o.k !== k && o.k !== "mine").map(o => ({ o, n: meals.filter(m => inGroup(m, o.k)).length }))
       .filter(({ o, n }) => picked.has(o.k) || (n > 0 && n < meals.length));
     put(s.body,
       chips.length ? h("div", { class: "fchips", role: "group", "aria-label": "Narrow it down" },
@@ -5181,7 +5207,7 @@ function planMeals() {
         h("div", { class: "seg", role: "group", "aria-label": "Cooking for" }, peopleOptions(people).map(n => h("button", { type: "button", class: "segb" + (people === n ? " on" : ""), "aria-pressed": String(people === n),
           text: `${n}`, onclick: () => { people = n; lsSet("people", String(n)); draw(); } })),
           h("button", { type: "button", class: "segb", text: "Other…", onclick: async () => { const n = await askPeople(people); if (n) { people = n; lsSet("people", String(n)); draw(); } } }))),
-      MEAL_GROUPS.map(g => { const ms = all.filter(m => mealHome(m) === g.k); return ms.length ? [h("h3", { class: "rh", text: `${g.e} ${g.name}` }), ms.map(row)] : null; }).flat(2).filter(Boolean),
+      MEAL_GROUPS.filter(g => g.s !== "region").map(g => { const ms = all.filter(m => mealHome(m) === g.k); return ms.length ? [h("h3", { class: "rh", text: `${g.e} ${g.name}` }), ms.map(row)] : null; }).flat(2).filter(Boolean),
       h("div", { class: "stickybar" }, h("button", { class: "btn green block", type: "button", disabled: !picked.size,
         text: picked.size ? `Plan ${picked.size} meal${picked.size === 1 ? "" : "s"} & build the list` : "Pick at least one meal",
         onclick: async () => {
