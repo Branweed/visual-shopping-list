@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=42";
+import { MORE_MEALS } from "./meals-more.js?v=43";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -188,7 +188,7 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-42";
+const APP_VERSION = "2026.10.18-43";
 const RULES_VERSION = "v15";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -4735,6 +4735,46 @@ function mealGroups(m) {
   return out;
 }
 const inGroup = (m, k) => mealGroups(m).has(k);
+// Which tiles a meal actually sits in. Tags (above) can overlap freely and still drive the chips inside a sheet,
+// but within the "Around the world" and "Ways to cook" rows each meal gets ONE tile, so every tile has its own meals
+// instead of the same dishes again. Its main group wins; otherwise the most specific cuisine
+// (a Greek dish filed under Mediterranean still lands on 🇬🇷 Greek), or the style tile
+// with the fewest meals so far (meals with fewest choices placed first, so small tiles don't get starved).
+// "Picks for you" (season, 30 min) and "By protein" stay as they are: those are shortcuts across everything.
+const ONE_TILE_ROWS = ["world", "style"];
+const WORLD_LAST = ["med", "american"];   // only if nothing more specific fits: Greek → Greek, not also Mediterranean
+let tileHomeCache = null;
+function tileHomes() {
+  if (tileHomeCache) return tileHomeCache;
+  const homes = new Map();   // meal name → { world: key, style: key }
+  ONE_TILE_ROWS.forEach(row => {
+    const keys = MEAL_GROUPS.filter(g => g.s === row).map(g => g.k);
+    const count = Object.fromEntries(keys.map(k => [k, 0]));
+    const todo = [];
+    QUICK_MEALS.forEach(m => {
+      const set = homes.get(m.name) || {}; homes.set(m.name, set);
+      const tags = mealGroups(m), can = keys.filter(k => tags.has(k));
+      if (keys.includes(m.g) && !(row === "world" && WORLD_LAST.includes(m.g) && can.some(x => !WORLD_LAST.includes(x)))) { set[row] = m.g; count[m.g]++; }
+      else if (can.length) todo.push([m, can]);
+    });
+    if (row === "world") todo.forEach(([m, can]) => {
+      const k = can.find(x => !WORLD_LAST.includes(x)) || WORLD_LAST.find(x => can.includes(x));
+      homes.get(m.name).world = k; count[k]++;
+    });
+    else todo.sort((a, b) => a[1].length - b[1].length).forEach(([m, can]) => {
+      const k = can.reduce((best, x) => count[x] < count[best] ? x : best);
+      homes.get(m.name).style = k; count[k]++;
+    });
+  });
+  return (tileHomeCache = homes);
+}
+function inTile(m, k) {
+  if (!inGroup(m, k)) return false;
+  const row = (MEAL_GROUPS.find(g => g.k === k) || {}).s;
+  if (!ONE_TILE_ROWS.includes(row) || m.g === "mine" || !m.g) return true;
+  const home = (tileHomes().get(m.name) || {})[row];
+  return !home || home === k;
+}
 // The animated icon on each category tile. Seafood is a little school of fish in different colors.
 function groupIcon(g, i) {
   const style = `--d:${(i * 0.37) % 3}s;--hue:${(i * 47) % 360}deg`;
@@ -4745,7 +4785,7 @@ function groupIcon(g, i) {
   return h("span", { class: "qe gicon ga-" + (g.a || "hop"), style, "aria-hidden": "true" }, h("span", { class: "glow" }), h("span", { class: "gemo", text: g.e }));
 }
 function groupTile(g, i) {
-  const n = allMeals().filter(m => inGroup(m, g.k)).length;
+  const n = allMeals().filter(m => inTile(m, g.k)).length;
   return h("button", { type: "button", class: "qtile gtile", onclick: () => openGroup(g.k), "aria-label": `${g.name}, ${n} meals` },
     groupIcon(g, i), h("span", { class: "qn", text: g.name }), h("span", { class: "qs ok", text: `${n} meal${n === 1 ? "" : "s"}` }));
 }
@@ -4788,7 +4828,7 @@ function openGroup(k) {
   const picked = new Set();
   const draw = () => {
     s.body.textContent = "";
-    const base = allMeals().filter(m => inGroup(m, k));
+    const base = allMeals().filter(m => inTile(m, k));
     const meals = base.filter(m => [...picked].every(p => inGroup(m, p)));
     const order = k === "american" ? [...MEAL_GROUPS.filter(o => o.s === "region"), ...MEAL_GROUPS.filter(o => o.s !== "region")] : MEAL_GROUPS.filter(o => o.s !== "region");
     const chips = order.filter(o => o.k !== k && o.k !== "mine").map(o => ({ o, n: meals.filter(m => inGroup(m, o.k)).length }))
