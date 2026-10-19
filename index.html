@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.googleapis.com; connect-src 'self' https://api.ocr.space https://world.openfoodfacts.org https://images.openfoodfacts.org https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://www.google.com https://apis.google.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; frame-src https://*.firebaseapp.com https://accounts.google.com https://apis.google.com https://www.google.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<script src="fit.js?v=40"></script>
+<script src="fit.js?v=41"></script>
 <title>Visual Shopping List</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
@@ -495,6 +495,46 @@ button.havetag,button.need{border:0;cursor:pointer;min-height:0}
 .gtile .qe{font-size:32px}
 .gtile.add{border-style:dashed;color:var(--primary-dark)}
 .gtile.add .qe{font-weight:800;color:var(--primary)}
+.gsec{margin-top:14px}.gsec:first-child{margin-top:10px}
+.gsech{display:flex;justify-content:space-between;align-items:baseline;padding:0 2px}.gsech h3{margin:0;font-size:15px}
+.grow{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - 16px) / 3.25);gap:8px;overflow-x:auto;scroll-snap-type:x proximity;padding:6px 2px 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.grow::-webkit-scrollbar{display:none}.grow>*{scroll-snap-align:start}
+@media(min-width:520px){.grow{grid-auto-columns:calc((100% - 24px) / 4.25)}}
+/* animated category icons: a color-shifting glow behind a little dancing emoji */
+.gicon{position:relative;width:60px;height:44px;display:grid;place-items:center;margin-bottom:2px}
+.gicon .glow{position:absolute;inset:0 6px;border-radius:50%;background:radial-gradient(circle,hsl(var(--hue) 90% 72%) 0%,hsl(var(--hue) 90% 80% / .5) 45%,transparent 72%);animation:g-glow 7s linear infinite;animation-delay:calc(var(--d) * -2)}
+.gicon .gemo{position:relative;display:inline-block;font-size:32px;line-height:1;animation:4s ease-in-out infinite;animation-delay:var(--d);transform-origin:50% 85%}
+@keyframes g-glow{to{filter:hue-rotate(360deg)}}
+.ga-sway .gemo{animation-name:g-sway}@keyframes g-sway{0%,100%{transform:rotate(0)}15%{transform:rotate(-9deg) translateX(-2px)}35%{transform:rotate(8deg) translateX(2px)}55%{transform:rotate(0)}}
+.ga-peck .gemo{animation-name:g-peck}@keyframes g-peck{0%,40%,100%{transform:rotate(0)}8%,24%{transform:rotate(-24deg) translateY(3px)}16%,32%{transform:rotate(0)}}
+.ga-wiggle .gemo{animation-name:g-wiggle}@keyframes g-wiggle{0%,45%,100%{transform:rotate(0) scale(1)}5%,15%,25%{transform:rotate(-10deg) scale(1.06)}10%,20%,30%{transform:rotate(10deg) scale(1.06)}}
+.ga-hop .gemo{animation-name:g-hop}@keyframes g-hop{0%,40%,100%{transform:translateY(0) scale(1)}10%{transform:translateY(0) scale(1.1,.88)}20%{transform:translateY(-10px) scale(.95,1.06)}30%{transform:translateY(0) scale(1.08,.92)}}
+.ga-wave .gemo{animation-name:g-wave;transform-origin:0 50%}@keyframes g-wave{0%,100%{transform:skewY(0) rotate(0)}25%{transform:skewY(-6deg) rotate(3deg)}50%{transform:skewY(5deg) rotate(-2deg)}75%{transform:skewY(-3deg)}}
+.ga-zap .gemo{animation-name:g-zap}@keyframes g-zap{0%,30%,100%{transform:scale(1);opacity:1}5%{transform:scale(1.25) rotate(-8deg);opacity:.6}10%{transform:scale(.95);opacity:1}15%{transform:scale(1.18) rotate(6deg);opacity:.7}20%{transform:scale(1)}}
+.ga-spin .gemo{animation-name:g-spin}@keyframes g-spin{0%,50%,100%{transform:rotateY(0) scale(1)}25%{transform:rotateY(180deg) scale(1.12)}}
+.ga-leaf .gemo{animation-name:g-leaf}@keyframes g-leaf{0%,100%{transform:translate(0,0) rotate(0)}25%{transform:translate(-4px,3px) rotate(-18deg)}50%{transform:translate(3px,5px) rotate(12deg)}75%{transform:translate(-2px,2px) rotate(-6deg)}}
+.ga-flip .gemo{animation-name:g-flip}@keyframes g-flip{0%,45%,100%{transform:translateY(0) rotate(0)}15%{transform:translateY(-12px) rotate(180deg)}30%{transform:translateY(0) rotate(360deg)}}
+.ga-crawl .gemo{animation-name:g-crawl;animation-duration:6s}@keyframes g-crawl{0%,100%{transform:translateX(5px)}50%{transform:translateX(-5px)}25%,75%{transform:translateX(0) translateY(-1px)}}
+.ga-bubble .gemo{animation-name:g-bubble}@keyframes g-bubble{0%,100%{transform:scale(1)}10%{transform:scale(1.08,.94)}20%{transform:scale(.96,1.06)}30%{transform:scale(1.06,.95)}40%{transform:scale(1)}}
+.ga-flicker .gemo{animation-name:g-flicker;animation-duration:1.6s}@keyframes g-flicker{0%,100%{transform:scale(1,1)}20%{transform:scale(1.05,1.12) skewX(-3deg)}40%{transform:scale(.97,.95)}60%{transform:scale(1.04,1.1) skewX(3deg)}80%{transform:scale(1,.97)}}
+.ga-twirl .gemo{animation-name:g-twirl;transform-origin:50% 50%}@keyframes g-twirl{0%,40%{transform:rotate(0)}70%,100%{transform:rotate(360deg)}}
+.ga-toss .gemo{animation-name:g-toss}@keyframes g-toss{0%,40%,100%{transform:translateY(0) rotate(0)}12%{transform:translateY(-8px) rotate(-10deg)}24%{transform:translateY(-4px) rotate(8deg)}}
+.ga-hug .gemo{animation-name:g-hug}@keyframes g-hug{0%,40%,100%{transform:scale(1)}10%,26%{transform:scale(1.16,.9)}18%{transform:scale(.94,1.06)}}
+.ga-float .gemo{animation-name:g-float;animation-duration:5s}@keyframes g-float{0%,100%{transform:translateY(2px) rotate(-5deg)}50%{transform:translateY(-6px) rotate(5deg)}}
+.ga-fish{overflow:hidden;border-radius:22px}
+.ga-fish .fish{position:absolute;font-size:17px;line-height:1;left:0;animation:g-swim 6s linear infinite}
+.ga-fish .f0{top:3px;animation-duration:6s}
+.ga-fish .f1{top:15px;font-size:20px;animation-duration:6.5s;animation-delay:-2.6s}
+.ga-fish .f2{top:25px;font-size:15px;animation-duration:7s;animation-delay:-4.9s}
+.ga-fish .f3{top:8px;font-size:14px;animation-duration:5.5s;animation-delay:-1.4s;filter:hue-rotate(150deg) saturate(1.6)}
+@keyframes g-swim{0%{transform:translate(64px,0)}25%{transform:translate(40px,-2px)}50%{transform:translate(18px,2px)}75%{transform:translate(-4px,-1px)}100%{transform:translate(-26px,0)}}
+@media (prefers-reduced-motion:reduce){.gicon .gemo,.gicon .glow,.ga-fish .fish{animation:none}.ga-fish .f0{left:6px}.ga-fish .f1{left:22px}.ga-fish .f2{left:38px}.ga-fish .f3{left:30px;top:2px}}
+/* stacking filter chips inside a category */
+.fchips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:none}.fchips::-webkit-scrollbar{display:none}
+.fchip{flex:none;display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font-weight:700;font-size:13.5px;min-height:38px;white-space:nowrap;color:var(--ink)}
+.fchip.on{border-color:var(--primary);background:var(--primary);color:#fff}
+.fchip.clear{color:var(--muted)}
+.fchip .fn{font-size:11.5px;background:var(--primary-soft);color:var(--primary-dark);border-radius:999px;padding:0 6px}
 .daysel{width:auto;min-height:38px;padding:4px 8px;font-size:14px;flex:none}
 .planned{border:2px solid var(--primary-soft)}
 .planned h2{margin:0}
@@ -607,6 +647,6 @@ button.havetag,button.need{border:0;cursor:pointer;min-height:0}
 <div class="toast" id="toast" role="status"></div>
 
 <noscript><p style="padding:20px">This app needs JavaScript turned on.</p></noscript>
-<script type="module" src="app.js?v=40"></script>
+<script type="module" src="app.js?v=41"></script>
 </body>
 </html>

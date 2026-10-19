@@ -1,4 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+import { MORE_MEALS } from "./meals-more.js?v=41";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -187,7 +188,7 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-40";
+const APP_VERSION = "2026.10.18-41";
 const RULES_VERSION = "v15";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -3984,14 +3985,7 @@ function renderCook() {
       mealSearch,
       mealHits,
       mealMake,
-      h("div", { class: "qgrid groups" },
-        MEAL_GROUPS.map(g => {
-          const n = allMeals().filter(m => mealHome(m) === g.k).length;
-          return h("button", { type: "button", class: "qtile gtile", onclick: () => openGroup(g.k) },
-            h("span", { class: "qe", text: g.e }), h("span", { class: "qn", text: g.name }), h("span", { class: "qs ok", text: `${n} meal${n === 1 ? "" : "s"}` }));
-        }),
-        h("button", { type: "button", class: "qtile gtile add", onclick: addRecipeFlow },
-          h("span", { class: "qe", text: "＋" }), h("span", { class: "qn", text: "Add a recipe" }), h("span", { class: "qs ok", text: "photo · paste · type" })))),
+      mealSections()),
     h("div", { class: "card cook" },
       h("h2", { text: "Ideas from what you have" }),
       h("p", { class: "lmeta", text: "The AI suggests meals using:" }),
@@ -4045,6 +4039,24 @@ function renderCook() {
 
 
 /* ---------- quick meals: classic recipes built in, so they never need the AI ---------- */
+// Older built-in meals moved from the old "Asian" group into their own country.
+const MEAL_REGROUP = { "Teriyaki Chicken": "japanese", "General Tso's Chicken": "chinese", "Pad Thai": "thai", "Korean Beef Bulgogi": "korean",
+  "Thai Red Curry Chicken": "thai", "Sweet & Sour Pork": "chinese", "Chicken Lo Mein": "chinese" };
+// Extra categories for the older built-in meals (newer ones carry t: in meals-more.js).
+const MEAL_TAGS = {
+  "Beef Tacos": "mexican kids budget", "Pot Roast": "comfort onepot fall winter", "Beef Stew": "comfort onepot fall winter", "Chicken & Chouriço": "onepot",
+  "Portuguese Kale Soup": "soups budget onepot fall winter", "Spaghetti & Meatballs": "italian kids comfort", "Chili": "onepot budget comfort fall winter",
+  "Chicken Parm": "italian kids", "Shepherd's Pie": "comfort winter", "Chicken Stir-Fry": "chinese", "Baked Ziti": "italian kids budget",
+  "Burgers": "grill kids sandwiches summer", "Steak Tips": "grill summer", "Meatloaf": "comfort kids", "Beef & Broccoli": "chinese", "Stuffed Peppers": "comfort",
+  "Roast Chicken & Vegetables": "onepot comfort", "Chicken Fajitas": "mexican onepot", "Chicken Pot Pie": "comfort winter", "BBQ Chicken Thighs": "grill kids budget southern summer",
+  "Sausage & Peppers": "italian sandwiches onepot budget", "Pork Chops & Apples": "comfort onepot fall", "Pulled Pork": "southern slow sandwiches grill",
+  "Shrimp Scampi": "italian pasta", "Fish Tacos": "mexican summer", "Fish & Chips": "kids", "Chicken Alfredo": "italian kids", "Baked Mac & Cheese": "comfort kids budget southern",
+  "Lasagna": "italian comfort", "Chicken Noodle Soup": "comfort kids onepot winter", "New England Clam Chowder": "comfort winter", "Minestrone": "italian budget onepot",
+  "Caçoila": "sandwiches", "Eggplant Parm": "italian", "Black Bean Quesadillas": "mexican kids budget", "Vegetable Fried Rice": "chinese budget",
+  "Grilled Cheese & Tomato Soup": "sandwiches comfort kids budget soups winter", "Spinach & Ricotta Stuffed Shells": "italian pasta", "Chicken Tortilla Soup": "soups",
+  "Pork Chile Verde": "soups onepot", "Teriyaki Chicken": "kids", "Greek Chicken Souvlaki": "grill summer", "Chicken Shawarma": "sandwiches",
+  "Greek Lemon Chicken & Potatoes": "onepot", "Shakshuka": "onepot breakfast", "Falafel Pitas": "sandwiches", "Sausage & Egg Breakfast Casserole": "kids"
+};
 const QUICK_MEALS = [
   { e: "🌮", g: "beef", name: "Beef Tacos", type: "dinner", minutes: 25, serves: 4, summary: "Seasoned ground beef in crunchy shells with all the toppings.",
     ingredients: [["Ground beef", "1 lb"], ["Taco shells", "12"], ["Taco seasoning", "1 packet"], ["Onion", "1 small"], ["Olive oil", "1 tsp"], ["Lettuce", "2 cups shredded"],
@@ -4464,7 +4476,8 @@ const QUICK_MEALS = [
     ingredients: [["Thick bread or Portuguese sweet bread", "8 slices"], ["Eggs", "4"], ["Milk", "1 cup"], ["Cinnamon", "1 tsp"], ["Vanilla", "1 tsp"], ["Sugar", "1 tbsp"], ["Butter", "2 tbsp"], ["Maple syrup", "to serve"]],
     steps: ["Whisk the eggs, milk, cinnamon, vanilla and sugar.", "Dip each slice for 10 seconds per side.", "Cook in butter over medium heat for 3 minutes per side until golden. Serve with syrup."] }
 
-].map(m => ({ ...m, id: "q-" + slug(m.name), quick: true, ingredients: m.ingredients.map(([item, amount]) => ({ item, amount, have: false })) }));
+, ...MORE_MEALS].map(m => ({ ...m, g: MEAL_REGROUP[m.name] || m.g, t: [m.t || "", MEAL_TAGS[m.name] || ""].join(" ").trim(),
+  id: "q-" + slug(m.name), quick: true, ingredients: m.ingredients.map(([item, amount]) => ({ item, amount, have: false })) }));
 const quickRecipe = m => ({ ...cleanIdea(m), ingredients: m.ingredients.map(i => ({ ...i, have: false })), quick: true, e: m.e });
 
 /* ---------- what's on hand: typed in, bought lately, or already on the shopping list ---------- */
@@ -4637,16 +4650,91 @@ function scaleAmount(a, f) {
 }
 
 /* ---------- meal groups: the first layer of the Meals menu ---------- */
-// Every meal lives in exactly one group. Breakfasts always go in Breakfast. Anything else ready in 30 minutes or less
-// (with no marinating ahead) goes in ⚡. Your own recipes stay in ★ My recipes.
+// A meal can sit in several groups: its main group (g), any extra tags (t), plus Beef/Chicken/Pork/Seafood/Meatless
+// worked out from its ingredients and ⚡ for anything ready in 30 minutes. Your own recipes stay in ★ My recipes.
+// a: the little animation each icon does (see .ga-* in index.html).
+const MEAL_SECTIONS = [["top", "Picks for you"], ["protein", "By protein"], ["world", "Around the world"], ["style", "Ways to cook"]];
+const SEASONS = { winter: { e: "❄️", name: "Winter warmers", a: "spin" }, spring: { e: "🌸", name: "Spring picks", a: "spin" },
+  summer: { e: "☀️", name: "Summer picks", a: "spin" }, fall: { e: "🍂", name: "Fall favorites", a: "leaf" } };
+const seasonNow = (d = new Date()) => ["winter", "winter", "spring", "spring", "spring", "summer", "summer", "summer", "fall", "fall", "fall", "winter"][d.getMonth()];
+const SEASON_GROUPS = { winter: ["soups", "slow"], spring: ["salads"], summer: ["grill", "salads"], fall: ["soups", "slow"] };
 const MEAL_GROUPS = [
-  { k: "quick", e: "⚡", name: "30 min or less" }, { k: "beef", e: "🥩", name: "Beef" }, { k: "chicken", e: "🍗", name: "Chicken" },
-  { k: "pork", e: "🐖", name: "Pork & Sausage" }, { k: "seafood", e: "🐟", name: "Seafood" }, { k: "pasta", e: "🍝", name: "Pasta" },
-  { k: "soups", e: "🍲", name: "Soups & Stews" }, { k: "portuguese", e: "🇵🇹", name: "Portuguese" }, { k: "mexican", e: "🇲🇽", name: "Mexican" },
-  { k: "asian", e: "🥢", name: "Asian" }, { k: "med", e: "🫒", name: "Mediterranean" }, { k: "meatless", e: "🥗", name: "Meatless" },
-  { k: "breakfast", e: "🍳", name: "Breakfast" }, { k: "mine", e: "★", name: "My recipes" }
+  { k: "season", s: "top", ...SEASONS[seasonNow()] }, { k: "quick", s: "top", e: "⚡", name: "30 min or less", a: "zap" }, { k: "mine", s: "top", e: "⭐", name: "My recipes", a: "spin" },
+  { k: "beef", s: "protein", e: "🐄", name: "Beef", a: "sway" }, { k: "chicken", s: "protein", e: "🐔", name: "Chicken", a: "peck" },
+  { k: "pork", s: "protein", e: "🐷", name: "Pork & Sausage", a: "wiggle" }, { k: "seafood", s: "protein", e: "🐟", name: "Seafood", a: "fish" },
+  { k: "meatless", s: "protein", e: "🥕", name: "Meatless", a: "hop" },
+  { k: "portuguese", s: "world", e: "🇵🇹", name: "Portuguese", a: "wave" }, { k: "mexican", s: "world", e: "🇲🇽", name: "Mexican", a: "wave" },
+  { k: "italian", s: "world", e: "🇮🇹", name: "Italian", a: "wave" }, { k: "chinese", s: "world", e: "🇨🇳", name: "Chinese", a: "wave" },
+  { k: "japanese", s: "world", e: "🇯🇵", name: "Japanese", a: "wave" }, { k: "korean", s: "world", e: "🇰🇷", name: "Korean", a: "wave" },
+  { k: "thai", s: "world", e: "🇹🇭", name: "Thai", a: "wave" }, { k: "indian", s: "world", e: "🇮🇳", name: "Indian", a: "wave" },
+  { k: "med", s: "world", e: "🫒", name: "Mediterranean", a: "hop" }, { k: "southern", s: "world", e: "🤠", name: "Southern & Cajun", a: "sway" },
+  { k: "breakfast", s: "style", e: "🍳", name: "Breakfast", a: "flip" }, { k: "slow", s: "style", e: "🐢", name: "Slow cooker", a: "crawl" },
+  { k: "onepot", s: "style", e: "🥘", name: "One-pot & sheet pan", a: "bubble" }, { k: "grill", s: "style", e: "🔥", name: "BBQ & grill", a: "flicker" },
+  { k: "soups", s: "style", e: "🍲", name: "Soups & stews", a: "bubble" }, { k: "pasta", s: "style", e: "🍝", name: "Pasta", a: "twirl" },
+  { k: "salads", s: "style", e: "🥗", name: "Salads", a: "toss" }, { k: "sandwiches", s: "style", e: "🥪", name: "Sandwiches & wraps", a: "hop" },
+  { k: "comfort", s: "style", e: "🧸", name: "Comfort food", a: "hug" }, { k: "kids", s: "style", e: "🎈", name: "Kid favorites", a: "float" },
+  { k: "budget", s: "style", e: "🪙", name: "Budget meals", a: "spin" }, { k: "desserts", s: "style", e: "🧁", name: "Desserts", a: "hop" }
 ];
-const mealHome = m => m.g === "mine" || !m.g ? "mine" : m.g === "breakfast" ? "breakfast" : (m.minutes && m.minutes <= 30 && !m.waitMinutes ? "quick" : m.g);
+// One home per meal, for lists that should show each meal once (like Plan the week).
+const mealHome = m => m.g === "mine" || !m.g ? "mine" : m.g === "breakfast" ? "breakfast" : (m.minutes && m.minutes <= 30 && !m.waitMinutes && m.type !== "dessert" ? "quick" : m.g);
+const NOT_MEAT = /\b(broth|stock|bouillon|soup mix|base)\b/i;
+const PROTEINS = {
+  beef: /\b(ground beef|beef|steaks?|sirloin|ribeye|chuck|brisket|short ribs|corned beef|meatballs|veal)\b/i,
+  chicken: /\b(chicken|drumsticks|wings)\b/i,
+  pork: /\b(pork|ham|ham hock|sausages?|kielbasa|chouriço|chourico|linguiça|linguica|andouille|prosciutto|carnitas)\b/i,
+  seafood: /\b(shrimp|cod|salmon|haddock|fish|tuna|clams?|scallops?|catfish|tilapia|crab|lobster|mussels|seafood|bacalhau)\b/i
+};
+const OTHER_MEAT = /\b(bacon|pancetta|pepperoni|turkey|lamb|anchov(y|ies)|salami|gelatin)\b/i;
+const mealTagCache = new WeakMap();
+function mealGroups(m) {
+  if (mealTagCache.has(m)) return mealTagCache.get(m);
+  const out = new Set();
+  if (m.g === "mine" || !m.g) out.add("mine");
+  else {
+    out.add(m.g);
+    String(m.t || "").split(/\s+/).filter(Boolean).forEach(t => out.add(t));
+    if (m.savedQuick) out.add("mine");   // a built-in meal you ★ saved shows in My recipes too
+  }
+  const sweet = m.type === "dessert" || m.g === "desserts", morning = m.type === "breakfast";
+  if (!sweet && !morning && m.minutes && m.minutes <= 30 && !m.waitMinutes) out.add("quick");
+  if (!sweet && !morning && m.g !== "mine") {
+    const items = (m.ingredients || []).map(i => typeof i === "string" ? i : i.item || "").filter(x => !NOT_MEAT.test(x) && !/fish sauce|oyster sauce/i.test(x));
+    let meat = false;
+    for (const [k, re] of Object.entries(PROTEINS)) if (items.some(x => re.test(x))) { out.add(k); meat = true; }
+    const anyMeat = meat || items.some(x => OTHER_MEAT.test(x)) || (m.ingredients || []).some(i => /chicken broth|beef broth|chicken stock|beef stock/i.test(typeof i === "string" ? i : i.item || ""));
+    if (anyMeat) out.delete("meatless"); else out.add("meatless");
+  }
+  const sz = seasonNow();
+  if (out.has(sz) || SEASON_GROUPS[sz].some(k => out.has(k) && k === m.g)) out.add("season");
+  mealTagCache.set(m, out);
+  return out;
+}
+const inGroup = (m, k) => mealGroups(m).has(k);
+// The animated icon on each category tile. Seafood is a little school of fish in different colors.
+function groupIcon(g, i) {
+  const style = `--d:${(i * 0.37) % 3}s;--hue:${(i * 47) % 360}deg`;
+  if (g.a === "fish")
+    return h("span", { class: "qe gicon ga-fish", style, "aria-hidden": "true" },
+      h("span", { class: "glow" }),
+      ["🐟", "🐠", "🐡", "🐟"].map((f, n) => h("span", { class: "fish f" + n, text: f })));
+  return h("span", { class: "qe gicon ga-" + (g.a || "hop"), style, "aria-hidden": "true" }, h("span", { class: "glow" }), h("span", { class: "gemo", text: g.e }));
+}
+function groupTile(g, i) {
+  const n = allMeals().filter(m => inGroup(m, g.k)).length;
+  return h("button", { type: "button", class: "qtile gtile", onclick: () => openGroup(g.k), "aria-label": `${g.name}, ${n} meals` },
+    groupIcon(g, i), h("span", { class: "qn", text: g.name }), h("span", { class: "qs ok", text: `${n} meal${n === 1 ? "" : "s"}` }));
+}
+// Category tiles in short rows you swipe sideways: Picks, By protein, Around the world, Ways to cook.
+function mealSections() {
+  let i = 0;
+  return h("div", { class: "gsections" }, MEAL_SECTIONS.map(([sk, label]) => {
+    const tiles = MEAL_GROUPS.filter(g => g.s === sk).map(g => groupTile(g, i++));
+    if (sk === "top") tiles.push(h("button", { type: "button", class: "qtile gtile add", onclick: addRecipeFlow },
+      h("span", { class: "qe", text: "＋" }), h("span", { class: "qn", text: "Add a recipe" }), h("span", { class: "qs ok", text: "photo · paste · type" })));
+    return h("section", { class: "gsec" }, h("div", { class: "gsech" }, h("h3", { text: label }), h("span", { class: "lmeta", text: tiles.length > 3 ? "swipe →" : "" })),
+      h("div", { class: "grow" }, tiles));
+  }));
+}
 // Built-in meals plus your saved ones, each exactly once: a saved copy of a built-in meal takes its place.
 function allMeals() {
   const saved = (S.recipes || []).slice().sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
@@ -4668,16 +4756,26 @@ function mealTile(m) {
     h("span", { class: "qn", text: (m.savedQuick ? "★ " : "") + m.name }),
     h("span", { class: "qs" + (n ? "" : " ok"), text: n ? `Need ${n}` : "✓ Ready" }));
 }
+// A category sheet. Chips along the top narrow it further — Chicken + ⚡ 30 min + Mexican — and they stack.
 function openGroup(k) {
   const g = MEAL_GROUPS.find(x => x.k === k);
   const s = openSheet(`${g.e} ${g.name}`);
+  const picked = new Set();
   const draw = () => {
     s.body.textContent = "";
-    const meals = allMeals().filter(m => mealHome(m) === k);
+    const base = allMeals().filter(m => inGroup(m, k));
+    const meals = base.filter(m => [...picked].every(p => inGroup(m, p)));
+    const chips = MEAL_GROUPS.filter(o => o.k !== k && o.k !== "mine").map(o => ({ o, n: meals.filter(m => inGroup(m, o.k)).length }))
+      .filter(({ o, n }) => picked.has(o.k) || (n > 0 && n < meals.length));
     put(s.body,
+      chips.length ? h("div", { class: "fchips", role: "group", "aria-label": "Narrow it down" },
+        picked.size ? h("button", { type: "button", class: "fchip clear", text: "✕ Clear", onclick: () => { picked.clear(); draw(); } }) : null,
+        chips.map(({ o, n }) => h("button", { type: "button", class: "fchip" + (picked.has(o.k) ? " on" : ""), "aria-pressed": String(picked.has(o.k)),
+          onclick: () => { picked.has(o.k) ? picked.delete(o.k) : picked.add(o.k); draw(); } }, `${o.e} ${o.name}`, picked.has(o.k) ? "" : h("span", { class: "fn", text: String(n) })))) : null,
+      picked.size ? h("p", { class: "lmeta", style: "margin:6px 2px 0", text: `${meals.length} of ${base.length} meals` }) : null,
       meals.length ? h("div", { class: "qgrid" }, meals.map(m => mealTile(m)))
         : h("div", { class: "empty small" }, h("b", { text: k === "mine" ? "No recipes of your own yet" : "Nothing here yet" }),
-            k === "mine" ? "Add one from a photo, pasted text, or type it in." : "Recipes you add that fit here show up automatically."),
+            k === "mine" ? "Add one from a photo, pasted text, or type it in. Tap ★ Save on any recipe to keep it here too." : "Recipes you add that fit here show up automatically."),
       h("button", { class: "btn block", type: "button", style: "margin-top:12px", text: "＋ Add a recipe", onclick: () => { s.close(); addRecipeFlow(); } }));
   };
   draw();
