@@ -1,6 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=46";
-import { MEAL_VERSIONS } from "./meal-versions.js?v=46";
+import { MORE_MEALS } from "./meals-more.js?v=47";
+import { MEAL_VERSIONS } from "./meal-versions.js?v=47";
+import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=47";
+import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=47";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -189,7 +191,7 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-46";
+const APP_VERSION = "2026.10.18-47";
 const RULES_VERSION = "v15";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -1847,6 +1849,7 @@ function itemForm(host, { item, store, name, prefill, onDone }) {
     const code = await scanBarcode();
     if (!code) return;
     d.upc = normUpc(code);
+    fetchNutrition(d.upc).then(() => draw());   // nutrition facts, allergens and labels, in the background
     if (!clip(d.name, 120) || !d.image) {
       const p = progressSheet("Looking it up"); p.set("Checking the free product database…");
       const info = await lookupBarcode(code);
@@ -1915,6 +1918,9 @@ function itemForm(host, { item, store, name, prefill, onDone }) {
       sugBox,
       d.upc ? h("div", { class: "upcline" }, h("span", { text: `🏷️ Barcode ${d.upc} is saved. Scan it anytime (Scan → Barcode) to find this item.` }),
         h("button", { class: "link", type: "button", text: "Remove", onclick: () => { d.upc = ""; draw(); } })) : null,
+      (() => { const v = d.upc ? nutCached(normUpc(d.upc)) : item ? nutCached("id:" + item.id) : null, t = nutSummary(v);
+        return d.upc || item ? h("div", { class: "upcline" }, h("span", { text: t ? `🥫 ${t}` : d.upc && v && v.found === false ? "🥫 Not in the product database yet." : d.upc && !v ? "🥫 Looking up nutrition…" : "🥫 No nutrition facts yet." }),
+          h("button", { class: "link", type: "button", text: t ? "Retake label" : "📷 Read label", onclick: async () => { if (await readNutritionLabel({ ...(item || {}), upc: d.upc })) draw(); } })) : null; })(),
       h("div", { class: "actions tools2" },
         h("button", { class: "btn", type: "button", text: d.upc ? "🏷️ Barcode ✓" : "🏷️ Scan barcode", onclick: scanCode }),
         h("button", { class: "btn", type: "button", text: "💲 Read price tag", onclick: tagPrice })),
@@ -3192,6 +3198,174 @@ async function lookupBarcode(code) {
   const raw = String(code || "").replace(/\D/g, "");
   return await tryOne(raw) || (normUpc(raw) !== raw ? await tryOne(normUpc(raw)) : null);
 }
+/* ---------- nutrition from your barcodes (Open Food Facts) and nutrition-label photos ---------- */
+// Kept on this device, keyed by barcode ("nut:0041196010152") or, for a label photo of an item with no barcode,
+// by item ("nut:id:abc123"). Barcode data is free to fetch again on any other device.
+const NUT_FIELDS = "product_name,brands,nutriments,serving_size,allergens_tags,labels_tags,nutriscore_grade,nova_group";
+let nutVer = 0;
+function nutCached(key) { try { const v = lsGet("nut:" + key); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+function nutSave(key, v) { lsSet("nut:" + key, JSON.stringify(v)); nutVer++; }
+const numOr = x => typeof x === "number" && isFinite(x) ? x : typeof x === "string" && x.trim() !== "" && isFinite(+x) ? +x : null;
+const nutOfItem = i => (i.upc && nutCached(normUpc(i.upc))) || nutCached("id:" + i.id) || null;
+const NUT_FRESH = 30 * 864e5;
+async function fetchNutrition(upc, force) {
+  upc = normUpc(upc);
+  if (!/^\d{8,14}$/.test(upc)) return null;
+  const old = nutCached(upc);
+  if (old && !force && Date.now() - (old.t || 0) < NUT_FRESH) return old;
+  const tryOne = async c => {
+    const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 9000);
+    try {
+      const r = await fetch(`${OFF_API}${encodeURIComponent(c)}.json?fields=${NUT_FIELDS}`, { signal: ctl.signal });
+      if (r.status === 404) return false;
+      if (!r.ok) throw new Error("off " + r.status);
+      const j = await r.json();
+      return j && j.status === 1 && j.product ? j.product : false;
+    } finally { clearTimeout(tm); }
+  };
+  let p;
+  try { p = await tryOne(upc); if (p === false && upc.startsWith("0")) p = await tryOne(upc.slice(1)); }
+  catch (e) { return old; }   // offline or the database is busy: keep what we had
+  const label = old && old.src === "label" ? { src: "label", per100: old.per100, srv: old.srv } : {};
+  if (!p) { const v = { ...(old || {}), src: "off", t: Date.now(), found: false, ...label }; nutSave(upc, v); return v; }
+  const n = p.nutriments || {};
+  const kcal = numOr(n["energy-kcal_100g"]) ?? (numOr(n.energy_100g) != null ? numOr(n.energy_100g) / 4.184 : null);
+  const per100 = kcal == null ? null : { kcal, p: numOr(n.proteins_100g) ?? 0, c: numOr(n.carbohydrates_100g) ?? 0, f: numOr(n.fat_100g),
+    fi: numOr(n.fiber_100g), su: numOr(n.sugars_100g), na: numOr(n.sodium_100g) != null ? Math.round(numOr(n.sodium_100g) * 1000) : null };
+  const sk = numOr(n["energy-kcal_serving"]);
+  const srv = sk != null ? { size: clip(p.serving_size || "", 40), kcal: sk, p: numOr(n.proteins_serving), c: numOr(n.carbohydrates_serving), f: numOr(n.fat_serving) }
+    : p.serving_size ? { size: clip(p.serving_size, 40) } : null;
+  const v = { src: "off", t: Date.now(), found: true, name: clip(p.product_name || "", 80), per100, srv,
+    al: (p.allergens_tags || []).slice(0, 20), lb: (p.labels_tags || []).filter(t => /gluten|vegan|dairy|lactose|milk|organic/.test(t)).slice(0, 12),
+    ns: clip(p.nutriscore_grade || "", 2), nova: numOr(p.nova_group), ...label };
+  nutSave(upc, v);
+  return v;
+}
+// Every scanned barcode that hasn't been looked up lately, gently (the database is free; don't hammer it).
+let nutRunning = null;
+function backfillNutrition(onProgress, force) {
+  if (nutRunning) return nutRunning;
+  const todo = [...new Set(S.inventory.filter(i => i.upc).map(i => normUpc(i.upc)))]
+    .filter(u => { const c = nutCached(u); return force || !c || Date.now() - (c.t || 0) > NUT_FRESH; });
+  if (!todo.length) return Promise.resolve(0);
+  nutRunning = (async () => {
+    let n = 0;
+    for (const u of todo) { await fetchNutrition(u, true); n++; onProgress && onProgress(n, todo.length); await new Promise(r => setTimeout(r, 700)); }
+    return n;
+  })().finally(() => { nutRunning = null; });
+  return nutRunning;
+}
+// Which of your products is this recipe ingredient? All the ingredient's words must be in the product's name,
+// and both must be the same kind of food ("Rice" → Jasmine Rice, never Rice Vinegar).
+let nutIdx = null, nutIdxKey = "";
+function nutProducts() {
+  const key = nutVer + ":" + S.inventory.length;
+  if (nutIdx && nutIdxKey === key) return nutIdx;
+  nutIdxKey = key;
+  nutIdx = S.inventory.map(i => ({ i, nut: nutOfItem(i) })).filter(x => x.nut && (x.nut.per100 || (x.nut.al && x.nut.al.length) || (x.nut.lb && x.nut.lb.length)))
+    .map(x => ({ ...x, terms: new Set(termsOf(x.i.name)), food: foodOf(x.i.name) }));
+  return nutIdx;
+}
+function productFor(item, food, need) {
+  const t = termsOf(item);
+  if (!t.length) return null;
+  return nutProducts().find(x => (!need || need(x.nut)) && x.food === food && t.every(w => x.terms.has(w))) || null;
+}
+function productNutrition(item, food) {
+  const x = productFor(item, food, n => n.per100);
+  return x ? { kcal: x.nut.per100.kcal, p: x.nut.per100.p, c: x.nut.per100.c } : null;
+}
+function productDiet(item, key) {
+  const x = productFor(item, foodOf(item));
+  if (!x) return null;
+  const al = x.nut.al || [], lb = x.nut.lb || [];
+  if (key === "gf") { if (lb.some(t => /gluten-free|no-gluten/.test(t))) return "free"; if (al.includes("en:gluten")) return "contains"; }
+  if (key === "df") { if (lb.some(t => /vegan|dairy-free|no-milk|no-dairy/.test(t))) return "free"; if (al.includes("en:milk")) return "contains"; }
+  return null;
+}
+// "🥫 200 cal · 7 g protein per serving (2 oz)"
+function nutSummary(v) {
+  if (!v) return "";
+  const s = v.srv || {};
+  if (s.kcal != null) return `${Math.round(s.kcal)} cal · ${Math.round(s.p || 0)} g protein · ${Math.round(s.c || 0)} g carbs per serving${s.size ? ` (${s.size})` : ""}`;
+  if (v.per100) return `${Math.round(v.per100.kcal)} cal · ${Math.round(v.per100.p)} g protein · ${Math.round(v.per100.c)} g carbs per 100 g`;
+  return "";
+}
+// A photo of the Nutrition Facts panel, read by the same free reader the app uses for recipes.
+async function readNutritionLabel(item) {
+  const how = await choose("Nutrition label", "Take a close photo of just the Nutrition Facts panel, straight on, without glare.",
+    [{ label: "📸 Take photo", value: "cam", cls: "primary" }, { label: "🖼️ Choose photo", value: "lib" }, { label: "Cancel", value: null }]);
+  if (!how) return null;
+  const file = await pickImage(how === "cam");
+  if (!file) return null;
+  const p = progressSheet("Reading the label");
+  let res;
+  try {
+    p.set("Getting the photo ready…");
+    const photo = await compressImage(file, { ladder: [[1600, 0.85], [1280, 0.82], [1024, 0.8]], limit: 1200000, raw: true });
+    p.set("Reading the numbers…");
+    res = await aiJSON([[
+      "This is a photo of a food package's Nutrition Facts panel. Read it exactly.",
+      'Return JSON: {"found": boolean, "servingSize": string, "servingGrams": number or null, "calories": number or null, "protein": number or null, "carbs": number or null, "fat": number or null, "fiber": number or null, "sugar": number or null, "sodium": number or null (mg), "glutenFree": true or null (true only if the package says gluten-free), "contains": [string] (from a "Contains:" allergen line, e.g. "wheat", "milk")}',
+      "Values are per serving, in grams except sodium. Use null for anything you can't read clearly. Never guess. Return only JSON."].join("\n"),
+      { inlineData: { mimeType: "image/jpeg", data: photo.split(",")[1] } }], t => p.set(t), AI_MODELS);
+  } catch (e) {
+    p.close();
+    await choose("Couldn't read the label", scanErrorText(e), [{ label: "OK", value: 1 }]);
+    return null;
+  }
+  p.close();
+  const kc = numOr(res && res.calories);
+  if (!res || res.found === false || kc == null) {
+    await choose("Couldn't read the label", "I couldn't make out the calories. Try again closer, straight on, with no glare.", [{ label: "OK", value: 1 }]);
+    return null;
+  }
+  const g = numOr(res.servingGrams), f = x => numOr(res[x]);
+  const lines = [`Serving: ${clip(res.servingSize || "?", 40)}`, `Calories: ${kc}`, ...[["Protein", "protein", "g"], ["Carbs", "carbs", "g"], ["Fat", "fat", "g"], ["Fiber", "fiber", "g"],
+    ["Sugar", "sugar", "g"], ["Sodium", "sodium", "mg"]].map(([l, k, u]) => `${l}: ${f(k) == null ? "couldn't read" : f(k) + " " + u}`)];
+  const contains = (Array.isArray(res.contains) ? res.contains : []).map(x => String(x).toLowerCase()).slice(0, 10);
+  if (contains.length) lines.push(`Contains: ${contains.join(", ")}`);
+  if (!g) lines.push("", "The serving weight wasn't readable, so recipes can't use these numbers yet. They'll still show on the item.");
+  const ok = await choose("Is this right?", lines.join("\n"), [{ label: "Save", value: true, cls: "primary" }, { label: "Cancel", value: null }]);
+  if (!ok) return null;
+  const per = x => g && f(x) != null ? f(x) / g * 100 : null;
+  const v = { src: "label", t: Date.now(), found: true,
+    per100: g ? { kcal: kc / g * 100, p: per("protein") ?? 0, c: per("carbs") ?? 0, f: per("fat"), fi: per("fiber"), su: per("sugar"), na: f("sodium") != null ? Math.round(f("sodium") / g * 100) : null } : null,
+    srv: { size: clip(res.servingSize || "", 40), kcal: kc, p: f("protein"), c: f("carbs"), f: f("fat") },
+    al: [...new Set(contains.flatMap(c => /wheat|gluten|barley|rye/.test(c) ? ["en:gluten"] : /milk|dairy/.test(c) ? ["en:milk"] : []))],
+    lb: res.glutenFree === true ? ["en:gluten-free"] : [] };
+  const key = item.upc ? normUpc(item.upc) : "id:" + item.id;
+  const old = nutCached(key);
+  nutSave(key, old ? { ...old, ...v, al: [...new Set([...(old.al || []), ...v.al])], lb: [...new Set([...(old.lb || []), ...v.lb])] } : v);
+  toast("Nutrition saved");
+  return v;
+}
+// On the Meals tab: how many of your scanned products have nutrition facts, and which ones need a label photo.
+function labelsCard() {
+  const scanned = S.inventory.filter(i => i.upc);
+  if (!scanned.length) return null;
+  const host = h("div", { class: "card nutcard" });
+  const draw = (prog) => {
+    const withNut = scanned.filter(i => (nutOfItem(i) || {}).per100);
+    const missing = scanned.filter(i => { const v = nutOfItem(i); return v && !v.per100; });
+    const waiting = scanned.length - withNut.length - missing.length;
+    put(host,
+      h("h2", { text: "📊 Nutrition from your barcodes" }),
+      h("p", { class: "lmeta", text: `${withNut.length} of ${scanned.length} scanned products have nutrition facts. Recipes that use them show real numbers instead of estimates.` }),
+      prog ? h("p", { class: "lmeta", text: `Checking the free product database… ${prog}` }) : waiting ? h("p", { class: "lmeta", text: `${waiting} still to check.` }) : null,
+      missing.length ? h("details", {}, h("summary", { text: `${missing.length} product${missing.length === 1 ? "" : "s"} not in the database: add a label photo` }),
+        h("div", { class: "nutmiss" }, missing.slice(0, 60).map(i => h("div", { class: "srow" },
+          h("div", { class: "sn", text: i.name }),
+          h("button", { class: "btn small", type: "button", text: "📷 Label", onclick: async () => { if (await readNutritionLabel(i)) draw(); } }))))) : null,
+      h("div", { class: "actions", style: "margin-top:8px" },
+        h("button", { class: "btn", type: "button", text: waiting ? "Check them now" : "↻ Check again", onclick: () => run(!waiting) })));
+  };
+  const run = force => backfillNutrition((n, t) => draw(`${n} of ${t}`), force).then(() => draw());
+  draw();
+  if (scanned.some(i => !nutOfItem(i))) run(false);   // fill in quietly the first time
+  return host;
+}
+
 // Keeps a copy of the product photo in the app; falls back to the web address if the copy isn't allowed.
 async function photoFromUrl(url) {
   if (!url) return "";
@@ -3852,12 +4026,42 @@ function quickSwap(r, k, from, to) {
   return { ...r, name: fix(r.name), steps, ingredients: r.ingredients.map((x, j) => j === k ? { ...x, item: to.label, have: iHave(to.label) } : x) };
 }
 
+// "About 520 cal · 38 g protein · 45 g carbs per serving"
+function nutritionLine(r) {
+  if (!r.ingredients || !r.ingredients.length) return null;
+  const n = nutrition(r.ingredients, r.serves, productNutrition);
+  if (!n.kcal) return null;
+  return h("p", { class: "lmeta nutline" }, h("b", { text: `About ${n.kcal} cal · ${n.protein} g protein · ${n.carbs} g carbs` }), " per serving",
+    n.labels ? ` · uses ${n.labels} of your scanned label${n.labels === 1 ? "" : "s"}` : " (estimate)");
+}
+// 🌾 Gluten-free / 🥛 Dairy-free: a badge when it already is, a button when swaps can make it so.
+function dietRow(r, on, off) {
+  const bits = DIET_KEYS.map(key => {
+    const d = DIETS[key], done = (r.diets || []).includes(key), st = done ? "done" : dietStatus(r.ingredients, key, productDiet);
+    if (st === "yes") return h("span", { class: "dbadge", text: `${d.e} ${d.name}` });
+    if (st === "done") return h("button", { type: "button", class: "dbadge on", title: "Undo the swaps", onclick: () => off(key) }, `${d.e} ${d.name} ✓ `, h("u", { text: "undo" }));
+    if (st === "swap") return h("button", { type: "button", class: "dbtn", onclick: () => on(key), text: `${d.e} ${d.make}` });
+    return null;
+  }).filter(Boolean);
+  return bits.length ? h("div", { class: "dietrow" }, bits) : null;
+}
+
 function openRecipe(r0) {
   let r = r0;                         // the recipe as it is now
   let draft = null;                   // pending edits, or null
   const s = openSheet(r.name);
   const body = h("div");
-  const pickVersion = k => { r = r.variants.make(k, r.serves || 4); draft = null; s.setTitle && s.setTitle(r.name); draw(); };
+  const withDiets = (nr, ds) => ds.reduce((x, d) => dietStatus(x.ingredients, d, productDiet) === "swap" ? applyDiet(x, d, productDiet) : x, nr);
+  const pickVersion = k => { r = withDiets(r.variants.make(k, r.serves || 4), r.diets || []); draft = null; s.setTitle && s.setTitle(r.name); draw(); };
+  // Make it gluten-free / dairy-free, and undo. Undo rebuilds from the version (or the recipe as it first opened).
+  const dietOn = key => { const orig = r.orig || r; r = { ...applyDiet(r, key, productDiet), orig }; draw(); toast(`${DIETS[key].e} ${DIETS[key].name} swaps made`); };
+  const dietOff = key => {
+    const keep = (r.diets || []).filter(d => d !== key);
+    const base = r.variants ? r.variants.make(r.variants.cur, r.serves || 4) : r.orig;
+    if (!base) return;
+    r = keep.length ? { ...withDiets(base, keep), orig: r.orig } : base;
+    draw();
+  };
   s.body.append(body);
   const startDraft = () => { if (!draft) draft = { serves: r.serves || 2, ingredients: r.ingredients.map(i => ({ ...i })), note: "" }; };
   const changed = () => draft && (draft.serves !== (r.serves || 2) || draft.note.trim() ||
@@ -3921,6 +4125,8 @@ function openRecipe(r0) {
       r.variants ? h("div", { class: "fchips vchips", role: "group", "aria-label": "Version" }, r.variants.list.map(x =>
         h("button", { type: "button", class: "fchip" + (x.k === r.variants.cur ? " on" : ""), "aria-pressed": String(x.k === r.variants.cur),
           onclick: () => x.k !== r.variants.cur && pickVersion(x.k) }, `${x.e} ${x.label}`))) : null,
+      nutritionLine(r),
+      !draft ? dietRow(r, dietOn, dietOff) : null,
       r.waitMinutes ? h("div", { class: "rwait" }, h("b", { text: "⏳ Plan ahead" }), h("span", { text: waitText(r) + (r.waitNote && !/\d/.test(r.waitNote) ? ` (about ${fmtMins(r.waitMinutes)})` : "") })) : null,
       r.summary ? h("p", { class: "msg", text: r.summary }) : null,
       h("div", { class: "actions rtop" },
@@ -4058,6 +4264,7 @@ function renderCook() {
       mealHits,
       mealMake,
       mealSections()),
+    labelsCard(),
     h("div", { class: "card cook" },
       h("h2", { text: "Ideas from what you have" }),
       h("p", { class: "lmeta", text: "The AI suggests meals using:" }),
@@ -4756,13 +4963,16 @@ function scaleAmount(a, f) {
 // A meal can sit in several groups: its main group (g), any extra tags (t), plus Beef/Chicken/Pork/Seafood/Meatless
 // worked out from its ingredients and ⚡ for anything ready in 30 minutes. Your own recipes stay in ★ My recipes.
 // a: the little animation each icon does (see .ga-* in index.html).
-const MEAL_SECTIONS = [["top", "Picks for you"], ["protein", "By protein"], ["world", "Around the world"], ["style", "Ways to cook"]];
+const MEAL_SECTIONS = [["top", "Picks for you"], ["health", "Healthy & diet"], ["protein", "By protein"], ["world", "Around the world"], ["style", "Ways to cook"]];
 const SEASONS = { winter: { e: "❄️", name: "Winter warmers", a: "spin" }, spring: { e: "🌸", name: "Spring picks", a: "spin" },
   summer: { e: "☀️", name: "Summer picks", a: "spin" }, fall: { e: "🍂", name: "Fall favorites", a: "leaf" } };
 const seasonNow = (d = new Date()) => ["winter", "winter", "spring", "spring", "spring", "summer", "summer", "summer", "fall", "fall", "fall", "winter"][d.getMonth()];
 const SEASON_GROUPS = { winter: ["soups", "slow"], spring: ["salads"], summer: ["grill", "salads"], fall: ["soups", "slow"] };
 const MEAL_GROUPS = [
   { k: "season", s: "top", ...SEASONS[seasonNow()] }, { k: "quick", s: "top", e: "⚡", name: "30 min or less", a: "zap" }, { k: "mine", s: "top", e: "⭐", name: "My recipes", a: "spin" },
+  { k: "hiprotein", s: "health", e: "💪", name: "High protein", a: "hop" }, { k: "light", s: "health", e: "⚖️", name: "Lighter meals", a: "sway" },
+  { k: "lowcarb", s: "health", e: "🥦", name: "Low carb", a: "hop" }, { k: "gf", s: "health", e: "🌾", name: "Gluten-free", a: "sway" },
+  { k: "df", s: "health", e: "🥛", name: "Dairy-free", a: "hop" },
   { k: "beef", s: "protein", e: "🐄", name: "Beef", a: "sway" }, { k: "chicken", s: "protein", e: "🐔", name: "Chicken", a: "peck" },
   { k: "pork", s: "protein", e: "🐷", name: "Pork & Sausage", a: "wiggle" }, { k: "seafood", s: "protein", e: "🐟", name: "Seafood", a: "fish" },
   { k: "meatless", s: "protein", e: "🥕", name: "Meatless", a: "hop" },
@@ -4809,13 +5019,25 @@ function versionFor(m, prefer) {
   if (!ks.length || !prefer.length) return "";
   const direct = ks.find(k => prefer.includes(k));   // e.g. 🐢 Slow cooker opens Pot Roast's slow cooker version
   if (direct) return direct;
-  prefer = prefer.filter(k => PROTEIN_KEYS.includes(k));
+  prefer = prefer.filter(k => PROTEIN_KEYS.includes(k) || HEALTH_KEYS.includes(k) || DIET_KEYS.includes(k));
   if (!prefer.length) return "";
-  const fits = mm => { const p = proteinsOf(mm); return prefer.every(k => k === "meatless" ? !p.anyMeat : p.keys.includes(k)); };
+  const fits = mm => { const p = proteinsOf(mm), t = healthTags(mm);
+    return prefer.every(k => k === "meatless" ? !p.anyMeat : PROTEIN_KEYS.includes(k) ? p.keys.includes(k) : t.has(k)); };
   if (fits(m)) return "";
   return ks.find(k => fits(mealVersion(m, k))) || "";
 }
 const PROTEIN_KEYS = ["beef", "chicken", "pork", "seafood", "meatless"];
+const HEALTH_KEYS = Object.keys(HEALTH);
+// 💪 / ⚖️ / 🥦 from the nutrition estimate (not for desserts), 🌾 / 🥛 when it is, or can be made, gluten- or dairy-free.
+function healthTags(m) {
+  const out = new Set(), sweet = m.type === "dessert" || m.g === "desserts";
+  if (!sweet && m.ingredients && m.ingredients.length) {
+    const n = nutrition(m.ingredients, m.serves);
+    HEALTH_KEYS.forEach(k => HEALTH[k](n) && out.add(k));
+  }
+  DIET_KEYS.forEach(d => dietStatus(m.ingredients, d) !== "no" && out.add(d));
+  return out;
+}
 function mealGroups(m) {
   if (mealTagCache.has(m)) return mealTagCache.get(m);
   const out = new Set();
@@ -4835,6 +5057,8 @@ function mealGroups(m) {
     all.forEach(p => p.keys.forEach(k => out.add(k)));
     if (all.some(p => !p.anyMeat)) out.add("meatless"); else out.delete("meatless");
   }
+  // Healthy & diet: from the estimated nutrition and the gluten/dairy check, counting every version of the meal.
+  for (const k of [...healthTags(m), ...mealVersionKeys(m).flatMap(v => [...healthTags(mealVersion(m, v))])]) out.add(k);
   const sz = seasonNow();
   if (out.has(sz) || SEASON_GROUPS[sz].some(k => out.has(k) && k === m.g)) out.add("season");
   mealTagCache.set(m, out);
@@ -4923,7 +5147,7 @@ function allMeals() {
 function mealTile(m0, prefer = []) {
   const vk = versionFor(m0, prefer), m = vk ? mealVersion(m0, vk) : m0;
   const n = m.ingredients.filter(i => ingStatus(typeof i === "string" ? i : i.item) === "need" && !STAPLES.has(norm(typeof i === "string" ? i : i.item))).length;
-  return h("button", { type: "button", class: "qtile", onclick: () => openMeal(m0, vk) },
+  return h("button", { type: "button", class: "qtile", onclick: () => openMeal(m0, vk, prefer.filter(k => DIET_KEYS.includes(k))) },
     h("span", { class: "qe", text: m.e || "★" }),
     h("span", { class: "qn", text: (m.savedQuick ? "★ " : "") + m.name }),
     h("span", { class: "qs" + (n ? "" : " ok"), text: n ? `Need ${n}` : "✓ Ready" }));
@@ -4964,7 +5188,7 @@ async function askPeople(current) {
 // 2 / 4 / 6 / 8, plus the number you used last if it's something else (like 5 or 12).
 const peopleOptions = last => [...new Set([...PEOPLE_CHOICES, ...(last && !PEOPLE_CHOICES.includes(last) ? [last] : [])])].sort((a, b) => a - b);
 // Tapping a meal: how many people? Then the recipe, sized for them (no AI).
-async function openMeal(m, vk = "") {
+async function openMeal(m, vk = "", diets = []) {
   const one = k => k ? quickRecipe(mealVersion(m, k)) : m.quick ? quickRecipe(m) : cleanIdea(m);
   const base = one(vk);
   if (!base) return;
@@ -4982,7 +5206,10 @@ async function openMeal(m, vk = "") {
   const V = (m.vbase || m).v;
   const variants = V ? { cur: vk, list: [{ k: "", e: V.e, label: V.label }, ...V.v.map(x => ({ k: x.k, e: x.e, label: x.label }))],
     make(k, people) { return { ...sized(one(k), people), variants: { ...variants, cur: k } }; } } : null;
-  openRecipe({ ...sized(base, n), variants });
+  // Opened from 🌾 Gluten-free or 🥛 Dairy-free: make the swaps right away.
+  let r = { ...sized(base, n), variants };
+  diets.forEach(d => { if (dietStatus(r.ingredients, d, productDiet) === "swap") r = applyDiet(r, d, productDiet); });
+  openRecipe(r);
 }
 
 /* ---------- your own recipes: photo, pasted text, or typed ---------- */

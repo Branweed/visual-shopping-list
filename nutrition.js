@@ -159,14 +159,26 @@ export function grams(amount, food) {
 }
 export const foodOf = item => FOODS.find(f => f.re.test(item)) || null;
 // Per serving: { kcal, protein, carbs }, rounded.
-export function nutrition(ingredients, serves) {
-  let kcal = 0, p = 0, c = 0;
+// lookup(item, food) can return { kcal, p, c } per 100 g from a real product label (a barcode you scanned);
+// the table still says how much a cup or a can of it weighs.
+export function nutrition(ingredients, serves, lookup) {
+  let kcal = 0, p = 0, c = 0, labels = 0;
   for (const i of ingredients || []) {
     const item = typeof i === "string" ? i : i.item, food = item && foodOf(item);
-    if (!food || !food.kcal) continue;
+    if (!food) continue;
+    const real = lookup ? lookup(item, food) : null, v = real || food;
+    if (!v.kcal) continue;
     const g = grams(typeof i === "string" ? "" : i.amount, food) / 100;
-    kcal += g * food.kcal; p += g * food.p; c += g * food.c;
+    if (!g) continue;
+    if (real) labels++;
+    kcal += g * v.kcal; p += g * v.p; c += g * v.c;
   }
   const n = Math.max(1, serves || 4);
-  return { kcal: Math.round(kcal / n / 10) * 10, protein: Math.round(p / n), carbs: Math.round(c / n) };
+  return { kcal: Math.round(kcal / n / 10) * 10, protein: Math.round(p / n), carbs: Math.round(c / n), labels };
 }
+// Sorting into the Healthy & diet tiles. Thresholds are per serving.
+export const HEALTH = {
+  hiprotein: n => n.protein >= 35 && n.protein * 4 >= n.kcal * 0.25,   // muscle building: lots of protein for the calories
+  light: n => n.kcal > 0 && n.kcal <= 550,                              // weight loss
+  lowcarb: n => n.kcal > 0 && n.carbs <= 25
+};

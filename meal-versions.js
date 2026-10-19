@@ -218,5 +218,73 @@ export const MEAL_VERSIONS = {
   "Chili": { e: "🐄", label: "Beef", v: [
     { k: "veggie", e: "🫘", label: "Veggie", name: "Three-Bean Veggie Chili", minutes: 45, swap: { "Ground beef": ["Black beans", "1 can"], "Beef broth": ["Vegetable broth", "1 cup"] },
       add: [["Pinto beans", "1 can"], ["Corn", "1 cup"], ["Olive oil", "2 tbsp"]],
-      steps: { 0: "Heat the oil in a large pot over medium heat.", 3: "Add the tomatoes, all the drained beans, the corn and broth. Simmer for 25 minutes, stirring now and then." } }] }
+      steps: { 0: "Heat the oil in a large pot over medium heat.", 3: "Add the tomatoes, all the drained beans, the corn and broth. Simmer for 25 minutes, stirring now and then." } },
+    { k: "slow", e: "🐢", label: "Slow cooker", name: "Slow Cooker Chili", minutes: 370,
+      steps: { 1: "Add the chopped onion and pepper and cook for 5 minutes. Stir in the garlic, chili powder, cumin and tomato paste for 1 minute.", 2: null,
+        3: "Scrape everything into the slow cooker with the tomatoes, drained beans and broth. Cook on low for 6 hours or high for 3." } },
+    { k: "instant", e: "⚡", label: "Instant Pot", name: "Instant Pot Chili", minutes: 50,
+      steps: { 0: "Set the Instant Pot to Sauté and brown the beef for 8 minutes. Drain the fat.",
+        3: "Add the tomatoes, drained beans and broth and stir, scraping the bottom so nothing sticks. Seal and pressure cook on High for 10 minutes, then let the pressure release naturally for 10 minutes." } }] },
+  /* ---------- More cooking methods: slow cooker, Instant Pot, oven, air fryer ---------- */
+  "Beef Stew": { e: "🍲", label: "Stovetop", v: [
+    { k: "slow", e: "🐢", label: "Slow cooker", name: "Slow Cooker Beef Stew", minutes: 510,
+      steps: { 3: "Move the beef and onion mixture to the slow cooker. Add the broth, Worcestershire, thyme, bay leaves and the potatoes, carrots and celery in chunks.",
+        4: "Cook on low for 8 hours until the beef is tender.", 5: "Stir in the peas, cover and cook for 10 more minutes. Taste for salt." } },
+    { k: "instant", e: "⚡", label: "Instant Pot", name: "Instant Pot Beef Stew", minutes: 80,
+      steps: { 1: "Set the Instant Pot to Sauté and brown the beef in the oil in batches, about 5 minutes per batch. Set it aside.",
+        3: "Add the broth, scraping up the browned bits, then the Worcestershire, thyme, bay leaves and the beef. Seal and pressure cook on High for 25 minutes, then let the pressure release naturally for 10 minutes.",
+        4: "Add the potatoes, carrots and celery in chunks. Seal and pressure cook on High for 4 minutes more, then quick release.", 5: "Stir in the peas on Sauté for 3 minutes. Taste for salt." } }] },
+  "Pork Carnitas": { e: "🔥", label: "Oven", v: [
+    { k: "instant", e: "⚡", label: "Instant Pot", name: "Instant Pot Carnitas", minutes: 95,
+      steps: { 0: "Cut the pork into 2 inch chunks and rub with the cumin, oregano, chili powder and salt.",
+        1: "Put the pork in the Instant Pot with one quartered onion, the garlic, the orange juice and squeezed halves, the juice of one lime, the bay leaves and 1/2 cup water.",
+        2: "Seal and pressure cook on High for 35 minutes, then let the pressure release naturally for 15 minutes." } },
+    { k: "slow", e: "🐢", label: "Slow cooker", name: "Slow Cooker Carnitas", minutes: 500,
+      steps: { 0: "Cut the pork into 2 inch chunks and rub with the cumin, oregano, chili powder and salt.",
+        1: "Put the pork in the slow cooker with one quartered onion, the garlic, the orange juice and squeezed halves, the juice of one lime, the bay leaves and 1/2 cup water.",
+        2: "Cook on low for 8 hours until it falls apart." } }] },
+  "Pulled Pork": { e: "🐢", label: "Slow cooker", v: [
+    { k: "instant", e: "⚡", label: "Instant Pot", name: "Instant Pot Pulled Pork", minutes: 120,
+      steps: { 1: "Cut the pork into 4 big chunks. Put the sliced onion in the Instant Pot, the pork on top, and pour in the vinegar and broth.",
+        2: "Seal and pressure cook on High for 60 minutes, then let the pressure release naturally for 15 minutes." } },
+    { k: "oven", e: "🔥", label: "Oven", name: "Oven Pulled Pork", minutes: 270,
+      steps: { 1: "Heat the oven to 300°F. Put the sliced onion in a Dutch oven, the pork on top, and pour in the vinegar and broth.", 2: "Cover and cook for 4 hours until it shreds easily." } }] },
+  "Homemade Chicken Tenders": { e: "🔥", label: "Oven", v: [
+    { k: "airfryer", e: "💨", label: "Air fryer", name: "Air Fryer Chicken Tenders", minutes: 30,
+      steps: { 0: "Heat the air fryer to 400°F.",
+        3: "Spray the basket with oil and air fry the tenders in a single layer, in batches, for 10 to 12 minutes, flipping halfway, until golden and 165°F inside." } }] },
+  "Korean Fried Chicken": { e: "🍳", label: "Deep fried", v: [
+    { k: "airfryer", e: "💨", label: "Air fryer", name: "Air Fryer Korean Chicken Wings", minutes: 45, swap: { "Vegetable oil": ["Cooking spray or oil", "1 tbsp"] },
+      steps: { 1: "Heat the air fryer to 380°F. Spray the coated wings with oil and air fry in a single layer, in batches, for 20 minutes, shaking halfway.",
+        2: "Turn it up to 400°F and air fry for 5 more minutes until very crisp and 165°F inside." } }] },
+  "Southern Fried Chicken": { e: "🍳", label: "Deep fried", v: [
+    { k: "airfryer", e: "💨", label: "Air fryer", name: "Air Fryer Southern Fried Chicken", minutes: 75, swap: { "Vegetable oil or shortening": ["Cooking spray or oil", "2 tbsp"] },
+      steps: { 2: "Heat the air fryer to 375°F.",
+        4: "Spray the chicken well with oil so no dry flour shows. Air fry in a single layer, in batches, for 25 to 30 minutes, turning and spraying again halfway, until golden and 165°F inside (175°F for dark meat)." } }] },
+  "Garlic Butter Salmon": { e: "🔥", label: "Oven", v: [
+    { k: "airfryer", e: "💨", label: "Air fryer", name: "Air Fryer Garlic Butter Salmon", minutes: 20,
+      steps: { 0: "Heat the air fryer to 400°F. Toss the asparagus with oil and salt.", 1: "Set the salmon and asparagus in the basket (in batches if needed) and season.",
+        3: "Air fry for 8 to 10 minutes, until the salmon flakes. Top with parsley." } }] },
+  "Fish & Chips": { e: "🍳", label: "Deep fried", v: [
+    { k: "airfryer", e: "💨", label: "Air fryer", name: "Air Fryer Fish & Chips", minutes: 50,
+      swap: { "Beer": null, "Baking powder": null, "Vegetable oil": ["Cooking spray or oil", "2 tbsp"] }, add: [["Eggs", "2"], ["Panko breadcrumbs", "2 cups"]],
+      steps: ["Heat the air fryer to 400°F. Cut the potatoes into wedges, toss with oil and salt and air fry in batches for 18 to 20 minutes, shaking halfway. Keep warm.",
+        "Set out the flour, the beaten eggs and the panko.", "Dust the fish in flour, dip in egg, then press into the panko. Spray with oil.",
+        "Air fry the fish in a single layer for 10 to 12 minutes, flipping halfway, until golden and flaky.", "Serve with the fries, lemon and tartar sauce."] }] },
+
+  /* ---------- Spice level ---------- */
+  "Nashville Hot Chicken": { e: "🔥", label: "Hot", v: [
+    { k: "mild", e: "🙂", label: "Mild", name: "Nashville Hot Chicken (Mild)", swap: { "Cayenne": ["Cayenne", "2 tsp"] }, add: [["Smoked paprika", "2 tsp"]],
+      steps: { 3: "Carefully whisk 1/2 cup of the hot frying oil with the cayenne, brown sugar, paprika and smoked paprika." } }] },
+  "Buffalo Chicken Wraps": { e: "🌶️", label: "Hot", v: [
+    { k: "mild", e: "🙂", label: "Mild", name: "Buffalo Chicken Wraps (Mild)", swap: { "Buffalo hot sauce": ["Buffalo hot sauce", "1/4 cup"], "Butter": ["Butter", "4 tbsp"] },
+      steps: { 1: "Melt the butter into the hot sauce (the extra butter tames the heat) and toss with the chicken." } }] },
+  "Spicy Korean Pork (Jeyuk Bokkeum)": { e: "🌶️", label: "Spicy", v: [
+    { k: "mild", e: "🙂", label: "Mild", name: "Korean Pork Stir-Fry (Mild)", swap: { "Gochujang": ["Gochujang", "1 tbsp"] }, add: [["Honey", "1 tbsp"]],
+      steps: { 1: "Mix the gochujang, soy sauce, sugar, honey, garlic, ginger and sesame oil and toss with the pork. Marinate 30 minutes." } }] },
+  "Shrimp Mozambique": { e: "🌶️", label: "Spicy", v: [
+    { k: "mild", e: "🙂", label: "Mild", name: "Shrimp Mozambique (Mild)", swap: { "Piri piri hot sauce": ["Piri piri hot sauce", "2 tsp"] } }] },
+  "Piri-Piri Chicken": { e: "🌶️", label: "Spicy", v: [
+    { k: "mild", e: "🙂", label: "Mild", name: "Piri-Piri Chicken (Mild)", swap: { "Red chilies (or 1 tsp crushed red pepper)": ["Red chili (or 1/4 tsp crushed red pepper)", "1"] }, add: [["Red bell pepper", "1/2"]],
+      steps: { 0: "Blend the chili, red bell pepper, garlic, lemon juice, paprika, oregano, vinegar, oil and salt into a sauce. Save 1/4 cup for serving." } }] }
 };

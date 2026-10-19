@@ -53,14 +53,23 @@ export const DIETS = {
 };
 export const DIET_KEYS = Object.keys(DIETS);
 const nameOf = i => typeof i === "string" ? i : i.item || "";
+// known(item, key) can answer from a scanned product's label: "free" (e.g. certified gluten-free, or no gluten in
+// its allergens) or "contains" (its label lists gluten / milk). Otherwise the ingredient name decides.
+const ruleFor = (d, n, known) => {
+  const k = known ? known(n, d.key) : null;
+  if (k === "free") return null;
+  const r = d.safe.test(n) ? null : d.rules.find(x => x.re.test(n));
+  if (r) return r;
+  return k === "contains" ? { instead: d.key === "gf" ? gfName : dfName } : null;   // e.g. a taco seasoning whose label lists wheat
+};
 // For one diet: "yes" (already fine), "swap" (fine after swaps), or "no".
-export function dietStatus(ingredients, key) {
+export function dietStatus(ingredients, key, known) {
   const d = DIETS[key];
   let swap = false;
   for (const i of ingredients || []) {
     const n = nameOf(i);
-    if (!n || d.safe.test(n)) continue;
-    const r = d.rules.find(x => x.re.test(n));
+    if (!n) continue;
+    const r = ruleFor(d, n, known);
     if (!r) continue;
     if (!r.instead) return "no";
     swap = true;
@@ -69,13 +78,13 @@ export function dietStatus(ingredients, key) {
 }
 const keepCase = (was, word) => /^[A-Z]/.test(was) ? word.charAt(0).toUpperCase() + word.slice(1) : word;
 // The recipe with every swap for this diet made, steps reworded to match, and a line about label-checking.
-export function applyDiet(r, key) {
+export function applyDiet(r, key, known) {
   const d = DIETS[key];
   let steps = r.steps.slice();
   const ingredients = r.ingredients.map(i => {
     const n = nameOf(i);
-    if (!n || d.safe.test(n)) return i;
-    const rule = d.rules.find(x => x.re.test(n));
+    if (!n) return i;
+    const rule = ruleFor(d, n, known);
     if (!rule || !rule.instead) return i;
     const item = typeof rule.instead === "function" ? rule.instead(n) : rule.instead;
     if (rule.step && rule.word) steps = steps.map(t => t.replace(rule.step, w => keepCase(w, rule.word)));

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.googleapis.com; connect-src 'self' https://api.ocr.space https://world.openfoodfacts.org https://images.openfoodfacts.org https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://www.google.com https://apis.google.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; frame-src https://*.firebaseapp.com https://accounts.google.com https://apis.google.com https://www.google.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<script src="fit.js?v=46"></script>
+<script src="fit.js?v=47"></script>
 <title>Visual Shopping List</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
@@ -530,7 +530,7 @@ button.havetag,button.need{border:0;cursor:pointer;min-height:0}
 @keyframes g-swim{0%{transform:translate(64px,0)}25%{transform:translate(40px,-2px)}50%{transform:translate(18px,2px)}75%{transform:translate(-4px,-1px)}100%{transform:translate(-26px,0)}}
 @media (prefers-reduced-motion:reduce){.gicon .gemo,.gicon .glow,.ga-fish .fish{animation:none}.ga-fish .f0{left:6px}.ga-fish .f1{left:22px}.ga-fish .f2{left:38px}.ga-fish .f3{left:30px;top:2px}}
 /* stacking filter chips inside a category */
-.fchips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:none}.vchips{margin:10px 0 2px}.fchips::-webkit-scrollbar{display:none}
+.fchips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:none}.vchips{margin:10px 0 2px}.nutline{margin:2px 0 8px}.nutline b{color:var(--ink)}.dietrow{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}.dbadge,.dbtn{font:inherit;font-size:13px;font-weight:700;border-radius:999px;padding:4px 10px;border:1px solid var(--line);background:none;color:inherit;cursor:pointer}.dbadge{background:var(--primary-soft);color:var(--primary-dark);border-color:transparent;cursor:default}button.dbadge{cursor:pointer}.dbtn{border-style:dashed}.nutcard summary{cursor:pointer;font-weight:700;margin:6px 0}.nutmiss .srow{display:flex;justify-content:space-between;align-items:center;gap:8px}.fchips::-webkit-scrollbar{display:none}
 .fchip{flex:none;display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font-weight:700;font-size:13.5px;min-height:38px;white-space:nowrap;color:var(--ink)}
 .fchip.on{border-color:var(--primary);background:var(--primary);color:#fff}
 .fchip.clear{color:var(--muted)}
@@ -647,6 +647,6 @@ button.havetag,button.need{border:0;cursor:pointer;min-height:0}
 <div class="toast" id="toast" role="status"></div>
 
 <noscript><p style="padding:20px">This app needs JavaScript turned on.</p></noscript>
-<script type="module" src="app.js?v=46"></script>
+<script type="module" src="app.js?v=47"></script>
 </body>
 </html>
