@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=50";
-import { MEAL_VERSIONS } from "./meal-versions.js?v=50";
-import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=50";
-import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=50";
+import { MORE_MEALS } from "./meals-more.js?v=51";
+import { MEAL_VERSIONS } from "./meal-versions.js?v=51";
+import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=51";
+import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=51";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -209,7 +209,7 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-50";
+const APP_VERSION = "2026.10.18-51";
 const RULES_VERSION = "v15";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -3290,6 +3290,15 @@ function nutSave(key, v) { lsSet("nut:" + key, JSON.stringify(v)); nutVer++; }
 const numOr = x => typeof x === "number" && isFinite(x) ? x : typeof x === "string" && x.trim() !== "" && isFinite(+x) ? +x : null;
 const nutOfItem = i => (i.upc && nutCached(normUpc(i.upc))) || nutCached("id:" + i.id) || null;
 const NUT_FRESH = 30 * 864e5;
+// Things that will never have Nutrition Facts: paper goods, cleaning, laundry, baby (except formula and baby food),
+// pet, health & beauty, household. Uses the same categories the app already sorts aisles by.
+function nonFood(i) {
+  if (/formula|baby food|puree|teether|snack|cereal/i.test(i.name || "")) return false;
+  return NON_FOOD.has(topGroup(groupScores(`${i.name || ""} ${i.aisle || ""}`)));
+}
+// Meat, deli, cheese and bakery packed in the store get a barcode that holds the price or weight, not a product,
+// so no database will ever have them. Those start with 2 (02… once padded to 13 digits).
+const storePacked = i => /^0?2\d{10,11}$/.test(normUpc(i.upc || ""));
 async function fetchNutrition(upc, force) {
   upc = normUpc(upc);
   if (!/^\d{8,14}$/.test(upc)) return null;
@@ -3327,7 +3336,7 @@ async function fetchNutrition(upc, force) {
 let nutRunning = null;
 function backfillNutrition(onProgress, force) {
   if (nutRunning) return nutRunning;
-  const todo = [...new Set(S.inventory.filter(i => i.upc).map(i => normUpc(i.upc)))]
+  const todo = [...new Set(S.inventory.filter(i => i.upc && !nonFood(i) && !storePacked(i)).map(i => normUpc(i.upc)))]
     .filter(u => { const c = nutCached(u); return force || !c || Date.now() - (c.t || 0) > NUT_FRESH; });
   if (!todo.length) return Promise.resolve(0);
   nutRunning = (async () => {
@@ -3424,8 +3433,10 @@ async function readNutritionLabel(item) {
 }
 // On the Meals tab: how many of your scanned products have nutrition facts, and which ones need a label photo.
 function labelsCard() {
-  const scanned = S.inventory.filter(i => i.upc);
-  if (!scanned.length) return null;
+  const all = S.inventory.filter(i => i.upc);
+  if (!all.length) return null;
+  const skipNF = all.filter(nonFood), skipSP = all.filter(i => !nonFood(i) && storePacked(i));
+  const scanned = all.filter(i => !nonFood(i) && !storePacked(i));   // food with a real product barcode
   const host = h("div", { class: "card nutcard" });
   const draw = (prog) => {
     const wasOpen = !!host.querySelector("details[open]");
@@ -3435,7 +3446,9 @@ function labelsCard() {
     const waiting = scanned.length - withNut.length - missing.length;
     put(host,
       h("h2", { text: "📊 Nutrition from your barcodes" }),
-      h("p", { class: "lmeta", text: `${withNut.length} of ${scanned.length} scanned products have nutrition facts. Recipes that use them show real numbers instead of estimates.` }),
+      h("p", { class: "lmeta", text: `${withNut.length} of ${scanned.length} scanned food products have nutrition facts. Recipes that use them show real numbers instead of estimates.` }),
+      skipNF.length || skipSP.length ? h("p", { class: "lmeta", text: [skipNF.length ? `${skipNF.length} non-food item${skipNF.length === 1 ? "" : "s"} (paper goods, cleaning, baby, pet, health) skipped` : "",
+        skipSP.length ? `${skipSP.length} store-packed item${skipSP.length === 1 ? "" : "s"} (meat, deli, bakery) skipped, no label needed` : ""].filter(Boolean).join(" · ") + "." }) : null,
       prog ? h("p", { class: "lmeta", text: `Checking the free product database… ${prog}` }) : waiting ? h("p", { class: "lmeta", text: `${waiting} still to check.` }) : null,
       missing.length ? h("details", wasOpen ? { open: "" } : {}, h("summary", { text: `${missing.length} product${missing.length === 1 ? "" : "s"} not in the database: add a label photo` }),
         h("div", { class: "nutmiss" }, missing.slice(0, 60).map(i => h("div", { class: "srow" },
