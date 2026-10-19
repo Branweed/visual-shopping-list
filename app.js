@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=56";
-import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=56";
-import { MEAL_VERSIONS } from "./meal-versions.js?v=56";
-import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=56";
-import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=56";
+import { MORE_MEALS } from "./meals-more.js?v=57";
+import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=57";
+import { MEAL_VERSIONS } from "./meal-versions.js?v=57";
+import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=57";
+import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=57";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -12,7 +12,7 @@ import {
 import {
   initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, getDocFromServer, getDocsFromServer,
-  onSnapshot, writeBatch, query, where, limit, Timestamp, deleteField, terminate, clearIndexedDbPersistence
+  onSnapshot, writeBatch, query, where, limit, orderBy, Timestamp, deleteField, terminate, clearIndexedDbPersistence
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 /* =====================================================================
@@ -50,7 +50,8 @@ const S = {
   listId: null, tab: "list", store: null, invQuery: "", hideChecked: false,
   calMonth: new Date(), calDay: dateKey(new Date()),
   ready: { inv: false, items: false }, busyLeaving: false,
-  aisleShared: new Map(), aisleMine: new Map()
+  aisleShared: new Map(), aisleMine: new Map(),
+  usual: null, aliasShared: {}
 };
 const uid = () => (S.user ? S.user.uid : null);
 const MAX_PEOPLE = 50;   // most people a recipe can be sized for
@@ -210,8 +211,8 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-56";
-const RULES_VERSION = "v17";   // must match the _rules/{v} line in firestore.rules
+const APP_VERSION = "2026.10.18-57";
+const RULES_VERSION = "v18";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
   try { await getDocFromServer(doc(db, "_rules", RULES_VERSION)); return true; }
@@ -864,6 +865,15 @@ function subscribeAll() {
     if (S.ready.items && S.tab === "list") renderList();
   }, e => { console.warn("price history", e); }));
 
+  S.usual = new Map(); S.usualReady = false; S.aliasShared = {};
+  subs.push(onSnapshot(query(hcol("usual"), orderBy("t", "desc"), limit(400)), snap => {
+    S.usual = new Map(snap.docs.map(d => [d.id, { ...d.data(), id: d.id }]));
+    S.usualReady = true;
+    if (S.ready.items && S.tab === "list") renderList();
+    if (usualSheet) usualSheet();
+  }, e => { console.warn("usual items", e); }));
+  subs.push(onSnapshot(hcol("aliases"), aliasesFromCloud, e => { console.warn("receipt matches", e); }));
+
   subs.push(onSnapshot(hcol("events"), snap => {
     S.events = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     renderCalendar();
@@ -989,7 +999,7 @@ async function deleteHouseholdData(hid, report) {
   const base = ["households", hid];
   const ops = [];
   report && report("Gathering everything…");
-  for (const c of ["events", "pantry", "nutrition"]) (await getDocsFromServer(collection(db, ...base, c))).forEach(d => ops.push(b => b.delete(d.ref)));
+  for (const c of ["events", "pantry", "nutrition", "trips", "usual", "aliases"]) (await getDocsFromServer(collection(db, ...base, c))).forEach(d => ops.push(b => b.delete(d.ref)));
   for (const l of (await getDocsFromServer(collection(db, ...base, "lists"))).docs) {
     (await getDocsFromServer(collection(db, ...base, "lists", l.id, "items"))).forEach(d => ops.push(b => b.delete(d.ref)));
     ops.push(b => b.delete(l.ref));
@@ -1354,6 +1364,9 @@ async function runSecurityCheck() {
     { t: "Other people's private edits are private", expect: "deny", run: () => getDocFromServer(doc(db, "users", rid(), "myItems", "x")) },
     { t: "Other people's price history is private", expect: "deny", run: () => getDocFromServer(doc(db, "users", rid(), "prices", "milk")) },
     { t: "Other households' label nutrition is private", expect: "deny", run: () => getDocsFromServer(query(collection(db, "households", rid(), "nutrition"), limit(1))) },
+    { t: "Other households' trips are private", expect: "deny", run: () => getDocsFromServer(query(collection(db, "households", rid(), "trips"), limit(1))) },
+    { t: "Your trips and spending work", expect: "ok", run: () => getDocsFromServer(query(tripCol(), limit(1))),
+      tip: "Publish the newest security rules (v18 adds trips, usual items and shared receipt matches)." },
     { t: "Other households' pantries are private", expect: "deny", run: () => getDocsFromServer(query(collection(db, "households", rid(), "pantry"), limit(1))) },
     { t: "Your pantry works", expect: "ok", run: () => getDocsFromServer(query(pantryCol(), limit(1))),
       tip: "Publish the newest security rules (they add the pantry)." },
@@ -1407,7 +1420,8 @@ function renderHeader() {
                h("button", { class: "hbtn", "aria-label": "List options", text: "⋯", onclick: listMenu }));
   } else if (S.tab === "stores") {
     title.textContent = S.store ? S.store : "Stores";
-    act.append(h("button", { class: "hbtn", text: "📈 Prices", onclick: () => openPrices() }));
+    act.append(h("button", { class: "hbtn", text: "📈 Prices", onclick: () => openPrices() }),
+               h("button", { class: "hbtn", text: "💵 Spending", onclick: openSpending }));
     if (S.store) act.append(h("button", { class: "hbtn", "aria-label": "Store options", text: "⋯", onclick: () => storeMenu(S.store) }));
   } else if (S.tab === "pantry") {
     title.textContent = "Pantry";
@@ -1463,7 +1477,10 @@ function renderList() {
   host.textContent = "";
   if (!S.ready.items) { host.append(h("div", { class: "empty", text: "Loading…" })); return; }
   const items = S.listItems.map(listView);
+  if (usualSheet) usualSheet();
   if (!items.length) {
+    const ub = usualBar();
+    if (ub) host.append(ub);
     host.append(h("div", { class: "empty" }, h("b", { text: "Your list is empty" }),
       "Type an item above, pick from your stores, or scan a handwritten list.",
       h("div", { class: "actions emptyscan" },
@@ -1479,6 +1496,8 @@ function renderList() {
     h("p", { class: "totnote", text: "Estimate before tax and bottle deposits." + (items.some(isPerLb) ? " ≈ items are sold by weight." : "") }));
   const cmp = compareBar(items);
   if (cmp) host.append(cmp);
+  const ub = usualBar();
+  if (ub) host.append(ub);
   if (checked.length) host.append(h("div", { class: "links" },
     h("button", { class: "link", text: S.hideChecked ? `Show checked (${checked.length})` : "Hide checked",
       onclick: () => { S.hideChecked = !S.hideChecked; lsSet("hideChecked", S.hideChecked ? "1" : "0"); renderList(); } }),
@@ -1519,8 +1538,10 @@ function listRow(it) {
           if (w === undefined) return;
           const u = { inCart: true };
           if (w) u.lbs = w;
+          notePurchases([{ name: it.name, store: it.store, inv: it.inventoryId }], it.store);
           return updateDoc(itemDoc(S.listId, it.id), u).catch(fail);
         }
+        if (it.inCart) unnotePurchase(it.name); else notePurchases([{ name: it.name, store: it.store, inv: it.inventoryId }], it.store);
         updateDoc(itemDoc(S.listId, it.id), { inCart: !it.inCart }).catch(fail);
       } },
       h("i", { text: it.inCart ? "✓" : "" })),
@@ -1650,6 +1671,8 @@ function listMenu() {
   const row = (label, fn, cls) => h("button", { class: "btn " + (cls || ""), text: label, onclick: () => { s.close(); fn(); } });
   s.body.append(h("div", { class: "menu" },
     row("📤  Share list", shareList),
+    row("💵  Spending & trips", openSpending),
+    row("🔁  Usual items", openUsual),
     row("✏️  Rename list", renameList),
     row("🧹  Clear checked items", clearChecked),
     row("＋  New list", newList),
@@ -2453,13 +2476,16 @@ function parseAIJson(t) {
 }
 
 // Local safety net: exact name match (preferring the chosen store), then a close "contains" match.
-// Words you've taught the app ("TP" → Angel Soft). Saved on this phone, per person.
-function aliasMap() { try { return JSON.parse(lsGet("aliases") || "{}"); } catch (e) { return {}; } }
+// Words you've taught the app ("TP" → Angel Soft). Kept on this phone and shared with the household
+// (households/{hid}/aliases), so a receipt match one person fixes works for everyone. The household's newest wins.
+function localAliases() { try { return JSON.parse(lsGet("aliases") || "{}") || {}; } catch (e) { return {}; } }
+function aliasMap() { return { ...localAliases(), ...(S.aliasShared || {}) }; }
 function learnAliases(pairs) {
-  const m = aliasMap();
-  pairs.forEach(([text, item]) => { const k = norm(text); if (k && item && item.id && k !== norm(item.name)) m[k] = item.id; });
+  const m = localAliases(), fresh = [];
+  pairs.forEach(([text, item]) => { const k = norm(text); if (k && item && item.id && k !== norm(item.name)) { m[k] = item.id; fresh.push([k, item.id]); } });
   const keys = Object.keys(m); if (keys.length > 500) keys.slice(0, keys.length - 500).forEach(k => delete m[k]);
   lsSet("aliases", JSON.stringify(m));
+  pushAliases(fresh);
 }
 const STOP = new Set(["the", "a", "an", "of", "and", "with", "for", "in", "oz", "lb", "lbs", "pack", "pk", "bag", "box", "can", "cans", "jar", "bottle", "large", "small", "big", "little"]);
 const words = t => String(t || "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter(w => w.length > 1 && !STOP.has(w)).map(w => w.replace(/(ies)$/, "y").replace(/(es|s)$/, ""));
@@ -3705,6 +3731,10 @@ function parseReceipt(text) {
   }
   const rows = [];
   let pending = null, last = null;   // a count/deal/weight line printed before its item; the item line we just read
+  // The receipt's own total (for saving the trip), plus subtotal + tax as a fallback, and the date it was printed.
+  const totals = [], date = receiptDate(lines);
+  let subtotal = null, tax = 0, wantTotal = false;
+  const amt = l => { const all = l.match(/-?\$?\s*\d{1,4}[.,]\d{2}\b/g); return all ? parseFloat(all[all.length - 1].replace(/[$\s]/g, "").replace(",", ".")) : null; };
   const fits = (row, total) => Math.abs(parseFloat(row.total) - total) < 0.035;
   const applyTo = (row, info) => {
     if (info.lbs) { row.per = "lb"; row.lbs = info.lbs; row.price = info.unit.toFixed(2); row.qty = 1; }
@@ -3726,6 +3756,14 @@ function parseReceipt(text) {
       if (last && fits(last, n * unit)) applyTo(last, info); else pending = info;
       last = null; continue;
     }
+    if (wantTotal) { wantTotal = false; if (/^\$?\s*\d{1,4}[.,]\d{2}$/.test(l)) { totals.push(amt(l)); continue; } }
+    if (/\b(total|balance due|amount due)\b/i.test(l) && !/(sub\s*-?\s*total|saving|saved|\btax|items?\b|discount|coupon|points|reward|\bqty\b)/i.test(l)) {
+      const a = amt(l);
+      if (a != null && a > 0 && a < 5000) totals.push(a); else if (a == null) wantTotal = true;
+      last = null; continue;
+    }
+    if (/sub\s*-?\s*total/i.test(l)) { const a = amt(l); if (a > 0) subtotal = a; last = null; continue; }
+    if (/^(sales\s*)?tax\d?\b/i.test(l)) { const a = amt(l); if (a > 0 && a < 500) tax += a; last = null; continue; }
     if (RECEIPT_HEAD.test(l)) { last = null; continue; }
     if (RECEIPT_SKIP.test(l)) { last = null; continue; }
     // "BANANAS 2.31 lb @ 0.69/lb 1.59" all on one line
@@ -3751,7 +3789,23 @@ function parseReceipt(text) {
     rows.push(row);
     last = row;
   }
-  return { store, rows: rows.slice(0, 80) };
+  const sumRows = Math.round(rows.reduce((a, r) => a + (parseFloat(r.total) || 0), 0) * 100) / 100;
+  let total = totals.length ? Math.max(...totals) : null, totalFrom = "receipt";
+  if (total == null && subtotal) total = Math.round((subtotal + tax) * 100) / 100;
+  if (total == null) { total = sumRows ? Math.round((sumRows + tax) * 100) / 100 : null; totalFrom = "sum"; }
+  return { store, rows: rows.slice(0, 80), total, totalFrom, date };
+}
+// The date printed on a receipt ("10/18/26", "10-18-2026", "Oct 18, 2026"), if it's in the last 90 days. Otherwise null.
+function receiptDate(lines) {
+  const now = Date.now(), ok = d => d && !isNaN(d) && d <= now + 864e5 && d >= now - 90 * 864e5;
+  const MON = "jan feb mar apr may jun jul aug sep oct nov dec".split(" ");
+  for (const l of lines) {
+    let m = l.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{2}|\d{4})\b/);
+    if (m) { const y = +m[3] < 100 ? 2000 + +m[3] : +m[3], d = new Date(y, +m[1] - 1, +m[2], 12).getTime(); if (ok(d)) return d; }
+    m = l.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b/i);
+    if (m) { const d = new Date(+m[3], MON.indexOf(m[1].toLowerCase()), +m[2], 12).getTime(); if (ok(d)) return d; }
+  }
+  return null;
 }
 async function receiptFlow() {
   const how = await choose("Scan a receipt", "Lay the receipt flat and take the photo straight on. Long receipt? Fold it and do it in two photos.\n\nPrices on your items are updated from it. Nothing is changed until you check and save.",
@@ -3761,15 +3815,20 @@ async function receiptFlow() {
   if (!file) return;
   const res = await freeRead(file, { engines: [2, 3], table: true, ladder: [[2000, 0.8], [1800, 0.78], [1600, 0.76], [1280, 0.72]], title: "Reading your receipt" });
   if (!res) { await choose("Couldn't read the receipt", "The free reader couldn't be reached or is busy. Try again in a minute.", [{ label: "OK", value: 1 }]); return; }
-  const { store, rows } = parseReceipt(res.text);
-  if (!rows.length) { await choose("No prices found", "Couldn't find item lines with prices. Try a straighter, closer photo in good light.", [{ label: "OK", value: 1 }]); return; }
-  receiptReview(rows, store);
+  const got = parseReceipt(res.text);
+  if (!got.rows.length && !got.total) { await choose("No prices found", "Couldn't find item lines with prices. Try a straighter, closer photo in good light.", [{ label: "OK", value: 1 }]); return; }
+  receiptReview(got.rows, got.store, got);
 }
-function receiptReview(found, storeHint) {
+function receiptReview(found, storeHint, info) {
   const names = storeNames();
   let store = storeHint && names.includes(storeHint) ? storeHint : (lsGet("lastStore") || "");
   if (store && !names.includes(store)) store = "";
   let tellAdmin = false;
+  // 💵 The receipt's total becomes a trip (households/{hid}/trips), for monthly spending and "estimated vs. spent".
+  info = info || {};
+  const trip = { total: info.total ? info.total.toFixed(2) : "", d: info.date || Date.now(), on: !!info.total && info.totalFrom === "receipt", guessed: info.totalFrom === "sum" };
+  let dupTrip = false;
+  loadTrips().then(() => { dupTrip = !!sameTrip(store, priceNum(trip.total), trip.d); if (dupTrip) { trip.on = false; draw(); } }).catch(() => {});
   const rows = found.map(f => ({ text: f.text, price: f.price, qty: f.qty || 1, per: f.per || "", lbs: f.lbs || 0, deal: f.deal || "", storePacked: !!f.storePacked,
     total: f.total || f.price, match: null, picked: false, on: false }));
   const changed = r => !!r.match && (priceNum(r.match.price) !== priceNum(r.price) || (r.per === "lb") !== isPerLb(r.match));
@@ -3783,16 +3842,28 @@ function receiptReview(found, storeHint) {
   const dupOf = r => r.match && rows.find(x => x !== r && x.match && x.match.id === r.match.id && x.on && rows.indexOf(x) < rows.indexOf(r));
   const dedupe = () => rows.forEach(r => { if (r.on && dupOf(r)) r.on = false; });
   matchAll(); dedupe();
-  const s = openSheet("Update prices");
+  const s = openSheet("Receipt");
   const draw = () => {
+    if (s.closed) return;
     s.body.textContent = "";
     const n = rows.filter(r => r.on && r.match).length;
-    const sel = h("select", { "aria-label": "Store", onchange: e => { store = e.target.value; rows.forEach(r => { r.picked = false; }); matchAll(); dedupe(); draw(); } },
+    const tot = priceNum(trip.total), est = store ? listEstimate(store) : null, saveTrip = trip.on && tot > 0 && !!store;
+    const sel = h("select", { "aria-label": "Store", onchange: e => { store = e.target.value; dupTrip = !!sameTrip(store, priceNum(trip.total), trip.d); if (dupTrip) trip.on = false; rows.forEach(r => { r.picked = false; }); matchAll(); dedupe(); draw(); } },
       h("option", { value: "", text: "Which store is this from?", disabled: true, selected: !store }),
       names.map(nm => h("option", { value: nm, text: nm, selected: nm === store })));
+    const totIn = h("input", { type: "text", inputmode: "decimal", value: trip.total, "aria-label": "Receipt total", style: "width:7em",
+      onchange: e => { trip.total = cleanPrice(e.target.value) || ""; if (priceNum(trip.total) > 0) trip.on = true; dupTrip = !!sameTrip(store, priceNum(trip.total), trip.d); draw(); } });
+    const dayIn = h("input", { type: "date", value: dateKey(new Date(trip.d)), max: dateKey(new Date()), "aria-label": "Trip date",
+      onchange: e => { const [y, m, d] = e.target.value.split("-").map(Number); if (y) { trip.d = new Date(y, m - 1, d, 12).getTime(); dupTrip = !!sameTrip(store, priceNum(trip.total), trip.d); draw(); } } });
     put(s.body,
       h("p", { class: "msg", text: `Found ${rows.length} line${rows.length === 1 ? "" : "s"} with prices. ${rows.filter(r => r.match).length} matched your items.` }),
       h("label", { class: "fl" }, h("span", { text: "Store" }), sel),
+      h("div", { class: "gcard trip-card" },
+        h("label", { class: "check", style: "margin:0" }, h("input", { type: "checkbox", checked: trip.on, onchange: e => { trip.on = e.target.checked; draw(); } }), h("b", { text: "💵 Save this trip" })),
+        h("div", { class: "trip-fields" }, h("label", {}, h("span", { class: "lmeta", text: "Total paid" }), totIn), h("label", {}, h("span", { class: "lmeta", text: "Date" }), dayIn)),
+        trip.guessed ? h("div", { class: "lmeta", text: "No total was found on the photo, so this adds up the lines. Check it against the receipt." }) : null,
+        dupTrip ? h("div", { class: "sr-status sr-warn", text: "A trip with this store, total and date is already saved." }) : null,
+        est && tot > 0 ? h("div", { class: "sr-status " + (tot <= est.total ? "sr-ok" : "sr-new"), text: `${est.label} estimated ${money(est.total)}, you spent ${money(tot)} (${tot >= est.total ? "+" : "−"}${money(Math.abs(tot - est.total))}).` }) : null),
       rows.map(r => {
         const m = r.match, old = m ? priceNum(m.price) : null, same = m && !changed(r);
         const how = r.per ? `${fmtLbs(r.lbs)} lb @ $${r.price}/lb = $${r.total}` : r.deal ? `${r.qty} @ ${r.deal} → $${r.price} each` : r.qty > 1 ? `${r.qty} @ $${r.price} each` : "";
@@ -3815,17 +3886,28 @@ function receiptReview(found, storeHint) {
               } }))));
       }),
       !S.admin && n ? h("label", { class: "check" }, h("input", { type: "checkbox", checked: tellAdmin, onchange: e => { tellAdmin = e.target.checked; } }), "Also send these prices to the admin") : null,
-      h("button", { class: "btn green block", type: "button", style: "margin-top:8px", disabled: !n, text: n ? `Update ${n} price${n === 1 ? "" : "s"}` : "Nothing to update", onclick: save }),
-      h("p", { class: "note", text: "Read by OCR.space's free text reader (it doesn't keep your photo). Matches you fix are remembered for the next receipt." }));
+      h("button", { class: "btn green block", type: "button", style: "margin-top:8px", disabled: !n && !saveTrip,
+        text: n && saveTrip ? `Save trip · update ${n} price${n === 1 ? "" : "s"}` : n ? `Update ${n} price${n === 1 ? "" : "s"}` : saveTrip ? "Save trip" : "Nothing to save", onclick: save }),
+      h("p", { class: "note", text: "Read by OCR.space's free text reader (it doesn't keep your photo). Matches you fix are remembered for everyone in your household. Trips are shared with your household." }));
   };
   async function save() {
     const pick = rows.filter(r => r.on && r.match);
-    if (!pick.length) return;
+    const tot = priceNum(trip.total), doTrip = trip.on && tot > 0 && !!store;
+    if (!pick.length && !doTrip) return;
+    let tripMsg = "";
+    if (doTrip) {
+      const est = listEstimate(store);
+      try { await addTrip({ store, total: tot, d: trip.d, n: rows.length, est: est ? est.total : null, list: est ? est.label : "", src: "receipt" }); }
+      catch (e) { return fail(e); }
+      tripMsg = est ? `Spent ${money(tot)} (list said ${money(est.total)})` : `Trip saved: ${money(tot)}`;
+    }
+    if (store) notePurchases(rows.filter(r => r.match && !dupOf(r)).map(r => ({ name: r.match.name, store, inv: r.match.id })), store, trip.d);
     const seen = rows.filter(r => r.match && !dupOf(r) && (r.on || !changed(r)));
     const jumps = await recordPrices(seen.map(r => ({ name: r.match.name, store, price: r.price, per: r.per === "lb" ? "lb" : (isPerLb(r.match) ? "lb" : ""), src: "receipt",
       was: r.match.store === store ? r.match.price : "", wasAt: r.match.updatedAt || r.match.createdAt })));
     learnAliases(rows.filter(r => r.match).map(r => [r.text, r.match]));
-    lsSet("lastStore", store);
+    if (store) lsSet("lastStore", store);
+    if (!pick.length) { s.close(); jumpsToast(tripMsg, jumps); return; }
     const ops = [], changes = new Map();
     for (const r of pick) {
       const it = r.match, price = cleanPrice(r.price);
@@ -3855,7 +3937,7 @@ function receiptReview(found, storeHint) {
         try { await addDoc(collection(db, "requests"), req); sent++; } catch (e) { console.warn(e); }
       }
     }
-    jumpsToast(`Updated ${pick.length} price${pick.length === 1 ? "" : "s"}` + (S.admin ? "" : " for you") + (sent ? ` · sent ${sent} to the admin` : ""), jumps);
+    jumpsToast((tripMsg ? tripMsg + " · " : "") + `Updated ${pick.length} price${pick.length === 1 ? "" : "s"}` + (S.admin ? "" : " for you") + (sent ? ` · sent ${sent} to the admin` : ""), jumps);
   }
   draw();
 }
@@ -6551,11 +6633,15 @@ function openShopMode(store) {
     const parts = [];
     let last = null;
     left.forEach(i => { const a = aisleLabel(i.aisle) || "No aisle"; if (a !== last) { parts.push(h("div", { class: "shopaisle", text: "🪧 " + a })); last = a; } parts.push(listRow(i)); });
+    const usual = dueUsual(store);
     put(s.body,
       h("div", { class: "shoptop" }, h("b", { text: `${done.length} of ${all.length} in the cart` }), h("span", { text: `${money(sum(done, lineTotal))} of ≈ ${money(sum(all, lineTotal))}` })),
+      usual.length ? h("div", { class: "shopusual" }, h("div", { class: "lmeta", text: "🔁 You usually get these here by now:" }),
+        h("div", { class: "chips-wrap" }, usual.slice(0, 8).map(x => h("button", { class: "chip", type: "button", "aria-label": `Add ${x.u.n}, bought ${everyText(x.every)}, last ${ago(x.last)}`, text: "＋ " + x.u.n, onclick: () => addUsual(x) })))) : null,
       left.length ? h("div", { class: "gcard" }, parts) : h("div", { class: "empty small" }, h("b", { text: "All done here 🎉" }), all.length ? "Everything for this store is in the cart." : "Nothing on the list for this store."),
       done.length ? h("details", { style: "margin-top:12px" }, h("summary", { class: "lmeta", text: `In the cart (${done.length})` }), h("div", { class: "gcard" }, done.map(listRow))) : null,
-      h("button", { class: "btn primary block", type: "button", style: "margin-top:14px", text: "Done shopping", onclick: () => s.close() }));
+      h("button", { class: "btn primary block", type: "button", style: "margin-top:14px", text: "Done shopping", onclick: () => s.close() }),
+      done.length ? h("button", { class: "btn block", type: "button", style: "margin-top:8px", text: "🧾 Scan the receipt · save the trip", onclick: () => { lsSet("lastStore", store); s.close(); receiptFlow(); } }) : null);
   };
   shopMode = { store, draw };
   s.onclose = () => { shopMode = null; document.removeEventListener("visibilitychange", vis); try { wake && wake.release(); } catch (e) {} };
@@ -6655,6 +6741,269 @@ function openPrices(highlight) {
 }
 
 /* =====================================================================
+   💵 TRIPS & SPENDING: each receipt's total is saved as a trip, shared with the
+   household (households/{hid}/trips). Needs firestore.rules v18.
+   ===================================================================== */
+const tripCol = () => hcol("trips");
+const storeColor = name => { let hsh = 0; for (const c of String(name || "?")) hsh = (hsh * 31 + c.charCodeAt(0)) >>> 0; return STORE_COLORS[hsh % STORE_COLORS.length]; };
+let tripsMemo = { hid: null, at: 0, v: [] };
+async function loadTrips(force) {
+  if (!force && tripsMemo.hid === S.hid && Date.now() - tripsMemo.at < 60e3) return tripsMemo.v;
+  const snap = await getDocs(query(tripCol(), orderBy("d", "desc"), limit(400)));
+  tripsMemo = { hid: S.hid, at: Date.now(), v: snap.docs.map(d => ({ ...d.data(), id: d.id })) };
+  return tripsMemo.v;
+}
+const sameTrip = (store, total, d) => tripsMemo.hid === S.hid && tripsMemo.v.find(t => t.store === store && Math.abs(t.total - total) < 0.01 && dateKey(new Date(t.d)) === dateKey(new Date(d)));
+function tripData(t) {
+  return { store: clip(t.store, 80), total: Math.round(priceNum(t.total) * 100) / 100, d: Math.round(t.d), n: Math.max(0, Math.min(999, Math.round(t.n || 0))),
+    est: t.est > 0 ? Math.round(t.est * 100) / 100 : null, list: clip(t.list || "", 60), src: t.src === "receipt" ? "receipt" : "typed", by: uid(), t: Date.now() };
+}
+async function addTrip(t) {
+  const data = tripData(t);
+  const ref = await addDoc(tripCol(), data);
+  if (tripsMemo.hid === S.hid) tripsMemo.v = [{ ...data, id: ref.id }, ...tripsMemo.v].sort((a, b) => b.d - a.d);
+}
+// What the open list said this store would cost: the items checked off for it if any (just shopped), otherwise everything for it.
+function listEstimate(store) {
+  const all = (S.listItems || []).map(listView).filter(i => (i.store || "Other") === store);
+  const got = all.filter(i => i.inCart), use = got.length ? got : all;
+  const total = Math.round(sum(use, lineTotal) * 100) / 100;
+  return total > 0 ? { total, label: `“${listName()}”` } : null;
+}
+const monthKey = d => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}`; };
+const monthName = (k, long) => { const [y, m] = k.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString(undefined, long ? { month: "long", year: "numeric" } : { month: "short" }); };
+async function openSpending() {
+  const s = openSheet("💵 Spending");
+  put(s.body, h("div", { class: "empty small", text: "Loading trips…" }));
+  let trips;
+  try { trips = await loadTrips(true); } catch (e) {
+    s.body.textContent = "";
+    put(s.body, h("p", { class: "err", text: e && e.code === "permission-denied" ? "Trips need the newest security rules (v18). In Firebase → Firestore Database → Rules, add the trips block from RULES-v18.md and tap Publish." : "Couldn't load trips. Are you online?" }));
+    return;
+  }
+  const now = new Date();
+  const months = []; for (let i = 5; i >= 0; i--) months.push(monthKey(new Date(now.getFullYear(), now.getMonth() - i, 15)));
+  let pick = months[months.length - 1];
+  const draw = () => {
+    if (s.closed) return;
+    s.body.textContent = "";
+    const byMonth = new Map(months.map(k => [k, []]));
+    trips.forEach(t => { const k = monthKey(t.d); if (byMonth.has(k)) byMonth.get(k).push(t); });
+    const tot = k => byMonth.get(k).reduce((a, t) => a + (t.total || 0), 0);
+    const hi = Math.max(1, ...months.map(tot));
+    const cur = byMonth.get(pick), curTot = tot(pick), prevK = months[months.indexOf(pick) - 1], prevTot = prevK ? tot(prevK) : null;
+    const stores = new Map(); cur.forEach(t => { const x = stores.get(t.store) || { total: 0, n: 0 }; x.total += t.total || 0; x.n++; stores.set(t.store, x); });
+    const sHi = Math.max(1, ...[...stores.values()].map(x => x.total));
+    const withEst = cur.filter(t => t.est > 0);
+    const over = withEst.reduce((a, t) => a + (t.total - t.est), 0);
+    put(s.body,
+      h("div", { class: "spend-months", role: "group", "aria-label": "Months" }, months.map(k => {
+        const v = tot(k);
+        return h("button", { type: "button", class: "spend-m" + (k === pick ? " on" : ""), "aria-pressed": String(k === pick), "aria-label": `${monthName(k, true)}: ${money(v)}`, onclick: () => { pick = k; draw(); } },
+          h("span", { class: "spend-amt", text: v ? "$" + Math.round(v) : "" }),
+          h("span", { class: "spend-bar" }, h("i", { style: `height:${Math.max(v ? 4 : 0, Math.round(v / hi * 100))}%` })),
+          h("span", { class: "spend-lbl", text: monthName(k) }));
+      })),
+      h("div", { class: "totals" },
+        h("div", { class: "t" }, h("div", { class: "lbl", text: monthName(pick, true) }), h("b", { text: money(curTot) })),
+        h("div", {}, h("div", { class: "lbl", text: "Trips" }), h("b", { text: String(cur.length) })),
+        h("div", {}, h("div", { class: "lbl", text: prevK ? "vs " + monthName(prevK) : "" }), h("b", { text: prevTot ? (curTot >= prevTot ? "+" : "−") + money(Math.abs(curTot - prevTot)) : "—" }))),
+      stores.size ? [h("h3", { class: "rh", text: "By store" }),
+        h("div", { class: "gcard" }, [...stores.entries()].sort((a, b) => b[1].total - a[1].total).map(([st, x]) => h("div", { class: "cmprow" },
+          storeTag(st),
+          h("div", { style: "flex:1;min-width:0" }, h("b", { text: st }), h("div", { class: "lmeta", text: `${x.n} trip${x.n === 1 ? "" : "s"}` }),
+            h("div", { class: "spend-hbar" }, h("i", { style: `width:${Math.round(x.total / sHi * 100)}%;background:${storeColor(st)}` }))),
+          h("b", { class: "cmpmoney", text: money(x.total) }))))] : null,
+      withEst.length ? h("p", { class: "msg", style: "margin-top:12px", text: `On ${withEst.length} trip${withEst.length === 1 ? "" : "s"} with a list, you spent ${money(Math.abs(over))} ${over >= 0 ? "more" : "less"} than the lists estimated.` + (over > 0 ? " Tax, deposits and extras usually make up the gap." : "") }) : null,
+      h("h3", { class: "rh", text: "Trips" }),
+      cur.length ? h("div", { class: "gcard" }, cur.map(t => h("button", { class: "srow", type: "button", onclick: () => editTrip(t) },
+        storeTag(t.store),
+        h("div", { style: "flex:1;min-width:0" }, h("div", { class: "sn", text: t.store }),
+          h("div", { class: "sc", text: new Date(t.d).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) +
+            (t.est > 0 ? ` · list ${money(t.est)} → spent ${money(t.total)} (${t.total >= t.est ? "+" : "−"}${money(Math.abs(t.total - t.est))})` : "") })),
+        h("b", { class: "cmpmoney", text: money(t.total) }))))
+        : h("div", { class: "empty small" }, h("b", { text: "No trips this month" }), "Scan a receipt (＋ → 🧾 Receipt prices) and its total is saved here."),
+      h("div", { class: "actions", style: "margin-top:14px" },
+        h("button", { class: "btn", type: "button", text: "🧾 Scan a receipt", onclick: () => { s.close(); receiptFlow(); } }),
+        h("button", { class: "btn", type: "button", text: "＋ Add a trip", onclick: () => editTrip(null) })),
+      h("p", { class: "note", text: "Shared with everyone in your household. Totals are what the receipt says you paid." }));
+  };
+  async function editTrip(t) {
+    const names = storeNames();
+    const es = openSheet(t ? "Trip" : "Add a trip");
+    let store = t ? t.store : (lsGet("lastStore") || names[0] || ""), total = t ? t.total.toFixed(2) : "", day = dateKey(new Date(t ? t.d : Date.now()));
+    put(es.body,
+      h("label", { class: "fl" }, h("span", { text: "Store" }), h("select", { onchange: ev => { store = ev.target.value; } },
+        [...new Set([...names, store].filter(Boolean))].map(n => h("option", { value: n, text: n, selected: n === store })))),
+      h("label", { class: "fl" }, h("span", { text: "Total paid" }), h("input", { type: "text", inputmode: "decimal", value: total, oninput: ev => { total = ev.target.value; } })),
+      h("label", { class: "fl" }, h("span", { text: "Date" }), h("input", { type: "date", value: day, max: dateKey(new Date()), onchange: ev => { day = ev.target.value; } })),
+      t && t.est > 0 ? h("p", { class: "lmeta", text: `${t.list || "The list"} estimated ${money(t.est)}.` }) : null,
+      h("button", { class: "btn green block", type: "button", text: "Save", onclick: async () => {
+        const p = priceNum(cleanPrice(total)), [y, m, d] = String(day).split("-").map(Number);
+        if (!(p > 0) || !store || !y) { toast("Add a store, total and date"); return; }
+        const data = { store, total: p, d: new Date(y, m - 1, d, 12).getTime(), n: t ? t.n : 0, est: t ? t.est : null, list: t ? t.list : "", src: t ? t.src : "typed" };
+        try {
+          if (t) { const full = tripData(data); await setDoc(doc(tripCol(), t.id), full); Object.assign(t, full); tripsMemo.v.sort((a, b) => b.d - a.d); }
+          else await addTrip(data);
+        } catch (err) { return fail(err); }
+        trips = tripsMemo.v; pick = monthKey(data.d); if (!months.includes(pick)) pick = months[months.length - 1];
+        es.close(); draw(); toast(t ? "Trip updated" : "Trip added");
+      } }),
+      t ? h("button", { class: "btn danger block", type: "button", style: "margin-top:8px", text: "Delete trip", onclick: async () => {
+        try { await deleteDoc(doc(tripCol(), t.id)); } catch (err) { return fail(err); }
+        tripsMemo.v = tripsMemo.v.filter(x => x.id !== t.id); trips = tripsMemo.v; es.close(); draw();
+        toast("Trip deleted", { label: "Undo", fn: async () => { const { id, ...data } = t; await setDoc(doc(tripCol(), id), { ...data, by: uid() }).catch(fail); tripsMemo.v = [t, ...tripsMemo.v].sort((a, b) => b.d - a.d); trips = tripsMemo.v; draw(); } });
+      } }) : null);
+  }
+  draw();
+}
+
+/* =====================================================================
+   🔁 USUAL ITEMS: when things get bought (checked off a list or on a receipt),
+   kept for a year and shared with the household (households/{hid}/usual).
+   Something bought on a rhythm that's due again gets suggested. Needs rules v18.
+   ===================================================================== */
+const usualKey = name => { const k = norm(foodName(name) || name).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80); return k; };
+const USUAL_KEEP = 12, USUAL_DAYS = 365;
+// items: [{ name, store, inv }] bought at `when`
+function notePurchases(items, store, when) {
+  if (!uid() || !S.usual || !S.usualReady) return;   // not loaded yet: don't overwrite history we haven't seen
+  when = Math.round(when || Date.now());
+  const ops = [], seen = new Set();
+  for (const x of items || []) {
+    const k = usualKey(x.name);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    const old = S.usual.get(k);
+    const ds = (old && Array.isArray(old.ds) ? old.ds : []).filter(d => typeof d === "number");
+    if (ds.some(d => Math.abs(d - when) < 2 * 864e5)) continue;   // already counted this trip
+    ds.push(when);
+    const keep = ds.sort((a, b) => a - b).filter(d => d >= Date.now() - USUAL_DAYS * 864e5).slice(-USUAL_KEEP);
+    const data = { n: clip(foodName(x.name) || x.name, 120), s: clip(x.store || store || (old && old.s) || "", 80), i: clip(x.inv || (old && old.i) || "", 64), ds: keep, t: Math.max(...keep), by: uid() };
+    S.usual.set(k, { ...data, id: k });
+    ops.push(b => b.set(hdoc("usual", k), data));
+  }
+  if (ops.length) commitOps(ops).catch(e => console.warn("usual items", e));
+}
+// Unchecked right after checking it? That wasn't a purchase.
+function unnotePurchase(name) {
+  const k = usualKey(name), old = S.usual && S.usual.get(k);
+  if (!old || !old.ds || !old.ds.length) return;
+  const last = Math.max(...old.ds);
+  if (Date.now() - last > 6 * 3600e3) return;
+  const ds = old.ds.filter(d => d !== last);
+  if (!ds.length) { S.usual.delete(k); deleteDoc(hdoc("usual", k)).catch(e => console.warn("usual items", e)); return; }
+  const data = { n: old.n, s: old.s || "", i: old.i || "", ds, t: Math.max(...ds), by: uid() };
+  S.usual.set(k, { ...data, id: k });
+  setDoc(hdoc("usual", k), data).catch(e => console.warn("usual items", e));
+}
+const median = a => { const b = a.slice().sort((x, y) => x - y), m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
+// How often it's bought: needs at least three purchases. null if there's no rhythm.
+function usualRhythm(u) {
+  const ds = (u.ds || []).slice().sort((a, b) => a - b);
+  if (ds.length < 3) return null;
+  const gaps = []; for (let i = 1; i < ds.length; i++) gaps.push(ds[i] - ds[i - 1]);
+  const every = median(gaps);
+  if (every < 2 * 864e5 || every > 60 * 864e5) return null;
+  return { every, last: ds[ds.length - 1], times: ds.length };
+}
+function usualSnoozes() { try { return JSON.parse(lsGet("usualSnooze") || "{}") || {}; } catch (e) { return {}; } }
+function dueUsual(store) {
+  if (!S.usual) return [];
+  const now = Date.now(), snooze = usualSnoozes();
+  const onList = new Set((S.listItems || []).map(i => usualKey(i.name)));
+  const out = [];
+  S.usual.forEach((u, k) => {
+    const r = usualRhythm(u);
+    if (!r || onList.has(k) || (snooze[k] && snooze[k] > now)) return;
+    if (store && (u.s || "") !== store) return;
+    const since = now - r.last;
+    if (since < r.every * 0.85 || since > r.every * 3) return;
+    const home = pantryMatch(u.n);
+    if (home && home.level === "plenty") return;
+    out.push({ key: k, u, ...r, since });
+  });
+  return out.sort((a, b) => b.since / b.every - a.since / a.every);
+}
+const everyText = ms => { const d = Math.round(ms / 864e5); return d <= 1 ? "every day or two" : d < 13 ? `about every ${d} days` : `about every ${Math.round(d / 7)} weeks`; };
+function addUsual(x) {
+  const u = x.u;
+  const item = (u.i && S.inventory.find(i => i.id === u.i)) || S.inventory.find(i => usualKey(i.name) === x.key && (!u.s || i.store === u.s)) ||
+    { name: u.n, store: u.s || "Other", aisle: "", price: "", image: "" };
+  addToList(item);
+}
+function snoozeUsual(x) {
+  const m = usualSnoozes(), now = Date.now();
+  m[x.key] = now + Math.max(2 * 864e5, x.every * 0.5);
+  Object.keys(m).forEach(k => { if (m[k] < now) delete m[k]; });
+  lsSet("usualSnooze", JSON.stringify(m));
+}
+function usualBar() {
+  const due = dueUsual();
+  if (!due.length) return null;
+  const names = due.slice(0, 3).map(x => x.u.n).join(", ") + (due.length > 3 ? ` +${due.length - 3}` : "");
+  return h("button", { class: "needbar usualbar", type: "button", onclick: openUsual },
+    h("span", { class: "nb-dot", text: "🔁" }),
+    h("div", {}, h("b", { text: due.length === 1 ? `${due[0].u.n}: you usually buy ${/s$/i.test(due[0].u.n) ? "these" : "this"} by now` : `${due.length} things you usually buy by now` }),
+      h("div", { text: due.length === 1 ? `${everyText(due[0].every)} · last ${ago(due[0].last)}` : names })),
+    h("span", { class: "chev", text: "›" }));
+}
+function openUsual() {
+  const s = openSheet("🔁 Usual items");
+  const draw = () => {
+    if (s.closed) return;
+    s.body.textContent = "";
+    const due = dueUsual();
+    const all = S.usual ? [...S.usual.entries()].map(([k, u]) => ({ key: k, u, r: usualRhythm(u) })).filter(x => x.r).sort((a, b) => a.r.every - b.r.every) : [];
+    put(s.body,
+      due.length ? [h("p", { class: "lmeta", text: "Things your household buys on a rhythm that are due again and aren't on the list." }),
+        h("div", { class: "gcard" }, due.map(x => h("div", { class: "cmprow" },
+          storeTag(x.u.s || "Other"),
+          h("div", { style: "flex:1;min-width:0" }, h("b", { text: x.u.n }), h("div", { class: "lmeta", text: `${everyText(x.every)} · last ${ago(x.last)}${x.u.s ? " · " + x.u.s : ""}` })),
+          h("button", { class: "btn", type: "button", text: "Not now", onclick: () => { snoozeUsual(x); draw(); renderList(); } }),
+          h("button", { class: "btn green", type: "button", text: "＋ Add", onclick: () => addUsual(x) })))),
+        due.length > 1 ? h("button", { class: "btn green block", type: "button", style: "margin-top:10px", text: `Add all ${due.length}`, onclick: () => due.forEach(addUsual) }) : null]
+        : h("div", { class: "empty small" }, h("b", { text: "Nothing due right now" }), "When something you buy regularly is due again, it shows up here."),
+      all.length ? h("details", { style: "margin-top:14px" }, h("summary", { class: "lmeta", text: `How often you buy things (${all.length})` }),
+        h("div", { class: "gcard" }, all.slice(0, 80).map(x => h("div", { class: "cmprow" },
+          h("div", { style: "flex:1;min-width:0" }, h("b", { text: x.u.n }), h("div", { class: "lmeta", text: `${everyText(x.r.every)} · ${x.r.times} times · last ${ago(x.r.last)}` }))))))
+        : h("p", { class: "note", text: "Learned from what gets checked off your lists and read off receipts. It needs about three purchases of something to spot a rhythm." }));
+  };
+  usualSheet = draw;
+  s.onclose = () => { usualSheet = null; };
+  draw();
+}
+let usualSheet = null;
+
+/* =====================================================================
+   🧾 RECEIPT MATCHES shared with the household (households/{hid}/aliases):
+   once someone teaches "MB GRD BF 80" = Ground Beef, everyone's receipts match. Needs rules v18.
+   ===================================================================== */
+const aliasId = k => { let hsh = 5381; for (const c of k) hsh = ((hsh * 33) ^ c.charCodeAt(0)) >>> 0; return (k.replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 60) || "x") + "-" + hsh.toString(36); };
+function pushAliases(pairs) {
+  if (!uid() || !S.hid) return;
+  const ops = [];
+  pairs.forEach(([k, id]) => {
+    if (!k || !id || k.length > 120 || id.length > 64 || S.aliasShared[k] === id) return;
+    S.aliasShared[k] = id;
+    ops.push(b => b.set(hdoc("aliases", aliasId(k)), { k, i: id, by: uid(), t: Date.now() }));
+  });
+  if (ops.length) commitOps(ops.slice(0, 500)).catch(e => console.warn("receipt matches", e));
+}
+function aliasesFromCloud(snap) {
+  const m = {};
+  snap.docs.map(d => d.data()).sort((a, b) => (a.t || 0) - (b.t || 0)).forEach(x => { if (x && typeof x.k === "string" && typeof x.i === "string") m[x.k] = x.i; });
+  S.aliasShared = m;
+  // First time on this phone for this household: send up matches it learned before sharing existed.
+  const flag = "aliasUp:" + S.hid;
+  if (!snap.metadata.fromCache && !lsGet(flag)) {
+    lsSet(flag, "1");
+    let local = {}; try { local = JSON.parse(lsGet("aliases") || "{}") || {}; } catch (e) {}
+    pushAliases(Object.entries(local).filter(([k]) => !(k in m)));
+  }
+}
+
+/* =====================================================================
    YOUR DATA: download everything the app keeps about you.
    ===================================================================== */
 async function exportMyData() {
@@ -6671,7 +7020,7 @@ async function exportMyData() {
       account: { uid: uid(), email: S.user.email || "", name: myName(), households: S.userDoc.households || {} },
       yours: { recipes, myItems: myItems.map(({ image, ...x }) => ({ ...x, hasPhoto: !!image })), prices, aisleMaps },
       household: { id: S.hid, name: S.household && S.household.name, members: (S.members || []).map(m => ({ name: m.name, email: m.email, role: m.role })),
-        lists, pantry: await rows(pantryCol()), calendar: await rows(hcol("events")) }
+        lists, pantry: await rows(pantryCol()), calendar: await rows(hcol("events")), trips: await rows(tripCol()), usualItems: await rows(hcol("usual")), receiptMatches: await rows(hcol("aliases")) }
     };
     saveFile(`my-shopping-data-${dateKey(new Date())}.json`, JSON.stringify(out, (k, v) => k === "image" ? (v ? "(photo)" : "") : v, 1), "application/json");
     toast("Your data is downloaded");
