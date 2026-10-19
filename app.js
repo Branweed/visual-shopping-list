@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=47";
-import { MEAL_VERSIONS } from "./meal-versions.js?v=47";
-import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=47";
-import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=47";
+import { MORE_MEALS } from "./meals-more.js?v=48";
+import { MEAL_VERSIONS } from "./meal-versions.js?v=48";
+import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=48";
+import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=48";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -59,14 +59,32 @@ const lsKey = k => `vsl:${uid() || "anon"}:${k}`;
 const lsGet = k => { try { return localStorage.getItem(lsKey(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(lsKey(k), v); } catch (e) {} };
 const JOIN_KEY = "vsl:pendingJoin";
-function getPendingJoin() {
+function pendingJoinInfo() {
   try {
     const v = JSON.parse(localStorage.getItem(JOIN_KEY) || "null");
-    if (v && v.code && Date.now() - v.at < 3 * 864e5) return v.code;
+    if (v && v.code && Date.now() - v.at < 3 * 864e5) return v;
   } catch (e) {}
   return null;
 }
-function setPendingJoin(code) { try { localStorage.setItem(JOIN_KEY, JSON.stringify({ code, at: Date.now() })); } catch (e) {} }
+function getPendingJoin() { const v = pendingJoinInfo(); return v ? v.code : null; }
+function setPendingJoin(code, from, hh) { try { localStorage.setItem(JOIN_KEY, JSON.stringify({ code, from: from || "", hh: hh || "", at: Date.now() })); } catch (e) {} }
+// Facebook Messenger, Instagram, Snapchat… open links in their own built-in browser, where Google refuses to sign anyone in.
+const IN_APP = /FBAN|FBAV|FB_IAB|FBIOS|Messenger|Instagram|Line\/|Snapchat|musical_ly|TikTok|; wv\)/i.test(navigator.userAgent || "");
+const IS_ANDROID = /Android/i.test(navigator.userAgent || "");
+// The same page, opened in Chrome on Android (keeps the invite in the address).
+function chromeIntentUrl() {
+  const u = new URL(location.href);
+  const v = pendingJoinInfo();
+  if (v) { u.searchParams.set("join", v.code); if (v.from) u.searchParams.set("from", v.from); if (v.hh) u.searchParams.set("hh", v.hh); }
+  u.hash = "";
+  return `intent://${u.host}${u.pathname}${u.search}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(u.href)};end`;
+}
+function inviteUrlNow() {
+  const u = new URL(location.href), v = pendingJoinInfo();
+  if (v) { u.searchParams.set("join", v.code); if (v.from) u.searchParams.set("from", v.from); if (v.hh) u.searchParams.set("hh", v.hh); }
+  u.hash = "";
+  return u.href;
+}
 function clearPendingJoin() { try { localStorage.removeItem(JOIN_KEY); } catch (e) {} }
 
 /* ---------- small helpers ---------- */
@@ -191,7 +209,7 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-47";
+const APP_VERSION = "2026.10.18-48";
 const RULES_VERSION = "v15";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -353,6 +371,9 @@ function authMsg(e) {
 }
 
 function showSignIn(mode = "signin", msg) {
+  const inv = pendingJoinInfo();
+  // Invited: the form starts on "create account" (they're new), unless they chose otherwise.
+  if (inv && mode === "signin" && !msg && !showSignIn.toggled) mode = "signup";
   const err = h("div", { class: "err hidden" });
   const okBox = h("div", { class: "ok hidden" });
   const showErr = t => { err.textContent = t; err.classList.remove("hidden"); okBox.classList.add("hidden"); };
@@ -401,23 +422,37 @@ function showSignIn(mode = "signin", msg) {
     showOk("If there's an account for that email, a reset link is on its way. Check your spam folder too.");
   }
 
-  const pendingJoin = getPendingJoin();
+  // Invited: one big Google button, with email tucked away underneath.
+  const emailOpen = !inv || showSignIn.emailOpen;
+  const inAppBox = IN_APP ? h("div", { class: "inapp" },
+    h("b", { text: "Open this in your phone's browser first" }),
+    h("p", { text: IS_ANDROID ? "You opened this inside Messenger (or another app). Google doesn't allow signing in there. Tap below to open it in Chrome."
+      : "You opened this inside Messenger (or another app). Google doesn't allow signing in there. Tap the ••• or share button and choose “Open in Safari” (or “Open in browser”)." }),
+    h("div", { class: "actions" },
+      IS_ANDROID ? h("a", { class: "btn primary", href: chromeIntentUrl(), text: "Open in Chrome" }) : null,
+      h("button", { class: "btn", type: "button", text: "Copy link", onclick: async () => {
+        try { await navigator.clipboard.writeText(inviteUrlNow()); toast("Link copied. Paste it into Chrome or Safari."); } catch (e) { toast("Press and hold the address to copy it."); }
+      } }))) : null;
   showGate(
-    h("h2", { text: mode === "signup" ? "Create your account" : "Sign in" }),
-    h("p", { class: "gsub", text: pendingJoin ? "Sign in to accept your invite." : "Shared stores and items, plus private lists for your household." }),
+    inAppBox,
+    h("h2", { text: inv ? (inv.from ? `${inv.from} invited you` : "You're invited") : mode === "signup" ? "Create your account" : "Sign in" }),
+    h("p", { class: "gsub", text: inv ? `Join ${inv.hh ? `“${inv.hh}”` : "their household"} to share shopping lists and meals. It takes a few seconds.`
+      : "Shared stores and items, plus private lists for your household." }),
     msg ? h("div", { class: "ok", text: msg }) : null,
     err, okBox,
     h("button", { class: "btn gbtn", type: "button", onclick: google },
       googleLogo(), "Continue with Google"),
-    h("div", { class: "or", text: "or use email" }),
-    h("form", { onsubmit: submit, autocomplete: "on" },
+    !emailOpen ? h("button", { class: "link block", type: "button", style: "margin-top:14px", text: "No Google account? Use email instead",
+      onclick: () => { showSignIn.emailOpen = true; showSignIn(mode); } }) : null,
+    emailOpen ? h("div", { class: "or", text: "or use email" }) : null,
+    !emailOpen ? null : h("form", { onsubmit: submit, autocomplete: "on" },
       mode === "signup" ? h("label", { class: "fl" }, name) : null,
       h("label", { class: "fl" }, email),
       h("label", { class: "fl" }, pw),
       h("button", { class: "btn primary block", type: "submit", text: mode === "signup" ? "Create account" : "Sign in" })),
-    h("div", { class: "linkrow" },
+    !emailOpen ? null : h("div", { class: "linkrow" },
       h("button", { class: "link", type: "button", text: mode === "signup" ? "I already have an account" : "Create an account",
-        onclick: () => showSignIn(mode === "signup" ? "signin" : "signup") }),
+        onclick: () => { showSignIn.toggled = true; showSignIn(mode === "signup" ? "signin" : "signup"); } }),
       mode === "signin" ? h("button", { class: "link", type: "button", text: "Forgot password?", onclick: forgot }) : null),
     h("p", { class: "note" }, "Lists and calendars are private to your household. Items and stores are shared by everyone using the app. ",
       h("a", { href: "privacy.html", target: "_blank", rel: "noopener", text: "Privacy policy" })));
@@ -435,7 +470,8 @@ function googleLogo() {
 }
 
 async function sendVerify(user) {
-  const url = location.origin + location.pathname;
+  const v = pendingJoinInfo();
+  const url = location.origin + location.pathname + (v ? "?" + new URLSearchParams({ join: v.code, from: v.from || "", hh: v.hh || "" }) : "");
   try { await sendEmailVerification(user, { url }); }
   catch (e) {
     if (e.code === "auth/unauthorized-continue-uri" || e.code === "auth/invalid-continue-uri") await sendEmailVerification(user);
@@ -448,9 +484,15 @@ function showVerify() {
   const err = h("div", { class: "err hidden" }), okBox = h("div", { class: "ok hidden" });
   const say = (box, t) => { [err, okBox].forEach(b => b.classList.add("hidden")); box.textContent = t; box.classList.remove("hidden"); };
   let lastSend = 0;
+  // Keep checking, so they don't have to come back and tap anything.
+  clearInterval(showVerify.timer);
+  showVerify.timer = setInterval(async () => {
+    if (!auth.currentUser || document.hidden) return;
+    try { await auth.currentUser.reload(); if (auth.currentUser.emailVerified) { clearInterval(showVerify.timer); await auth.currentUser.getIdToken(true); route(); } } catch (e) {}
+  }, 4000);
   showGate(
     h("h2", { text: "Check your email" }),
-    h("p", { class: "gsub", text: `We sent a link to ${u.email}. Open it to confirm your email, then come back and tap the button below.` }),
+    h("p", { class: "gsub", text: `We sent a link to ${u.email}. Tap it, and this screen will continue on its own (check spam if you don't see it).` }),
     err, okBox,
     h("button", { class: "btn primary block", text: "I've confirmed my email", onclick: async () => {
       try {
@@ -623,6 +665,29 @@ async function showJoin(code) {
   }
   const err = h("div", { class: "err hidden" });
   let busy = false;
+  // They tapped the invite link and signed in: that's a yes. Join straight away; show the screen only if it fails.
+  const joinNow = async () => {
+    if (busy) return; busy = true;
+    try {
+      const b = writeBatch(db);
+      b.set(doc(db, "households", inv.householdId, "members", uid()), memberData("member", code));
+      b.set(doc(db, "users", uid()), { households: { [inv.householdId]: inv.householdName }, activeHousehold: inv.householdId, updatedAt: Date.now() }, { merge: true });
+      await b.commit();
+      clearPendingJoin();
+      S.userDoc.households[inv.householdId] = inv.householdName;
+      S.userDoc.activeHousehold = inv.householdId;
+      await enterHousehold(inv.householdId);
+      toast(`Welcome to ${inv.householdName}`);
+      return true;
+    } catch (e) {
+      console.error(e);
+      err.textContent = e.code === "permission-denied" ? "That invite isn't valid anymore. Ask for a new link." : "Couldn't join. Check your connection and try again.";
+      err.classList.remove("hidden");
+      return false;
+    } finally { busy = false; }
+  };
+  gateLoading(`Joining “${inv.householdName}”…`);
+  if (await joinNow()) return;
   showGate(
     h("h2", { text: `Join “${inv.householdName}”?` }),
     h("p", { class: "gsub", text: "You'll share stores, items and lists with everyone in this household. They'll see your name and email." }),
@@ -1198,7 +1263,8 @@ async function createInvite() {
     }), 15000);
   } catch (e) { p.close(); return e.code === "timeout" ? toast("You need to be online to make an invite.") : fail(e); }
   p.close();
-  const link = `${location.origin}${location.pathname}#join=${code}`;
+  const lq = new URLSearchParams({ join: code, from: clip(myName().split(" ")[0], 40), hh: clip(S.household.name, 60) });
+  const link = `${location.origin}${location.pathname}?${lq}`;
   const s = openSheet("Invite someone");
   s.body.append(
     h("p", { class: "msg", text: `Send this link to someone you trust. Anyone with it can join “${S.household.name}” for the next ${INVITE_DAYS} days.` }),
@@ -6330,10 +6396,12 @@ async function exportMyData() {
   history.replaceState(null, "", location.pathname + location.hash);
 })();
 (function captureInvite() {
-  const m = location.hash.match(/join=([A-Za-z0-9]{16,40})/);
-  if (m) {
-    setPendingJoin(m[1]);
-    history.replaceState(null, "", location.pathname + location.search);
+  const q = new URLSearchParams(location.search), hq = new URLSearchParams(location.hash.replace(/^#/, ""));
+  const code = (q.get("join") || hq.get("join") || "").replace(/[^A-Za-z0-9]/g, "");
+  if (code.length >= 16 && code.length <= 40) {
+    setPendingJoin(code, clip(q.get("from") || hq.get("from") || "", 40), clip(q.get("hh") || hq.get("hh") || "", 60));
+    ["join", "from", "hh"].forEach(k => q.delete(k));
+    history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : ""));
   }
 })();
 document.querySelectorAll(".tabs button[data-tab]").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
