@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=43";
+import { MORE_MEALS } from "./meals-more.js?v=44";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -188,7 +188,7 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-43";
+const APP_VERSION = "2026.10.18-44";
 const RULES_VERSION = "v15";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -4412,36 +4412,36 @@ const QUICK_MEALS = [
     steps: ["Boil the noodles for 6 minutes and drain.", "Stir-fry the sliced chicken in the oil for 5 minutes.", "Add the carrots and cabbage for 3 minutes, then the garlic for 30 seconds.",
       "Add the noodles, soy, oyster sauce, sesame oil and sugar and toss for 2 minutes. Top with green onions."] },
   /* ---- mediterranean ---- */
-  { e: "🍢", g: "med", name: "Greek Chicken Souvlaki", type: "dinner", minutes: 30, waitMinutes: 60, waitNote: "Marinate 1 hour, or overnight", serves: 4, summary: "Lemon-oregano chicken skewers with homemade tzatziki and pita.",
+  { e: "🍢", g: "greek", name: "Greek Chicken Souvlaki", type: "dinner", minutes: 30, waitMinutes: 60, waitNote: "Marinate 1 hour, or overnight", serves: 4, summary: "Lemon-oregano chicken skewers with homemade tzatziki and pita.",
     ingredients: [["Boneless chicken thighs", "2 lb"], ["Olive oil", "1/4 cup"], ["Lemons", "2"], ["Garlic", "4 cloves"], ["Oregano", "2 tsp dried"], ["Salt", "1 1/2 tsp"], ["Black pepper", "1/2 tsp"],
       ["Pita bread", "8"], ["Greek yogurt", "1 cup"], ["Cucumber", "1"], ["Dill", "1 tbsp"], ["Tomatoes", "2"], ["Red onion", "1"], ["Skewers", "8"]],
     steps: ["Cut the chicken into 1 1/2 inch pieces. Marinate with the oil, juice of 1 lemon, 3 garlic cloves, oregano, salt and pepper for 1 hour.",
       "Make tzatziki: grate the cucumber, squeeze it dry and mix with the yogurt, the last garlic clove, dill, a squeeze of lemon and salt.",
       "Thread the chicken onto skewers (soak wooden ones first).", "Grill or broil for 12 minutes, turning, until cooked through.",
       "Serve on warm pita with tzatziki, sliced tomato and red onion."] },
-  { e: "🥙", g: "med", name: "Chicken Shawarma", type: "dinner", minutes: 45, serves: 4, summary: "Sheet-pan spiced chicken in pita with hummus and garlic yogurt.",
+  { e: "🥙", g: "greek", name: "Chicken Shawarma", type: "dinner", minutes: 45, serves: 4, summary: "Sheet-pan spiced chicken in pita with hummus and garlic yogurt.",
     ingredients: [["Boneless chicken thighs", "2 lb"], ["Olive oil", "1/4 cup"], ["Lemon", "1"], ["Garlic", "3 cloves"], ["Cumin", "2 tsp"], ["Paprika", "2 tsp"], ["Coriander", "1 tsp"],
       ["Turmeric", "1/2 tsp"], ["Cinnamon", "1/4 tsp"], ["Salt", "1 1/2 tsp"], ["Red onion", "1"], ["Pita bread", "8"], ["Hummus", "1 cup"], ["Plain yogurt", "1/2 cup"], ["Lettuce", "2 cups"], ["Tomatoes", "2"]],
     steps: ["Heat the oven to 425°F. Mix the oil, lemon juice, 2 garlic cloves, spices and salt.", "Toss the chicken and onion wedges in it and spread on a sheet pan.",
       "Roast for 30 minutes, then broil for 3 minutes to char the edges.", "Stir the last garlic clove into the yogurt.", "Slice the chicken and serve in pita with hummus, lettuce, tomato and garlic yogurt."] },
-  { e: "🫕", g: "med", name: "Moussaka", type: "dinner", minutes: 130, serves: 8, summary: "Greek layered eggplant and spiced meat sauce under a creamy topping.",
+  { e: "🫕", g: "greek", name: "Moussaka", type: "dinner", minutes: 130, serves: 8, summary: "Greek layered eggplant and spiced meat sauce under a creamy topping.",
     ingredients: [["Eggplants", "3"], ["Ground beef or lamb", "1 1/2 lb"], ["Onion", "1"], ["Garlic", "3 cloves"], ["Tomato sauce", "15 oz can"], ["Red wine", "1/2 cup"], ["Cinnamon", "1 tsp"],
       ["Oregano", "1 tsp"], ["Olive oil", "1/3 cup"], ["Butter", "4 tbsp"], ["Flour", "1/3 cup"], ["Milk", "3 cups"], ["Eggs", "2"], ["Parmesan cheese", "1/2 cup"], ["Nutmeg", "a pinch"], ["Salt", "2 tsp"]],
     steps: ["Heat the oven to 400°F. Slice the eggplant 1/2 inch thick, brush with oil, salt and roast for 25 minutes.",
       "Brown the meat and onion for 10 minutes, add the garlic, then the wine, tomato sauce, cinnamon and oregano. Simmer for 15 minutes.",
       "Melt the butter, stir in the flour for 1 minute, whisk in the milk and simmer for 5 minutes. Off the heat whisk in the eggs, Parmesan and nutmeg.",
       "Lower the oven to 350°F. Layer eggplant, meat sauce and more eggplant in a 9x13 dish and pour the white sauce over.", "Bake for 45 minutes until golden. Rest for 20 minutes before cutting."] },
-  { e: "🍋", g: "med", name: "Greek Lemon Chicken & Potatoes", type: "dinner", minutes: 70, serves: 4, summary: "Crispy chicken thighs roasted with lemony, oregano potatoes.",
+  { e: "🍋", g: "greek", name: "Greek Lemon Chicken & Potatoes", type: "dinner", minutes: 70, serves: 4, summary: "Crispy chicken thighs roasted with lemony, oregano potatoes.",
     ingredients: [["Bone-in chicken thighs", "2 1/2 lb"], ["Yukon Gold potatoes", "2 lb"], ["Lemons", "2"], ["Olive oil", "1/3 cup"], ["Garlic", "6 cloves"], ["Oregano", "1 tbsp dried"],
       ["Chicken broth", "1 cup"], ["Salt", "2 tsp"], ["Black pepper", "1 tsp"]],
     steps: ["Heat the oven to 425°F. Whisk the oil, lemon zest and juice, garlic, oregano, salt and pepper.", "Toss the potato wedges and chicken in it.",
       "Arrange in a roasting pan with the chicken skin-side up and pour the broth around.", "Roast for 55 minutes, until the chicken reaches 165°F and the potatoes are tender.", "Broil for 3 minutes to crisp the skin."] },
-  { e: "🥘", g: "med", name: "Shakshuka", type: "dinner", minutes: 35, serves: 4, summary: "Eggs poached in a spiced tomato and pepper sauce, with feta and bread.",
+  { e: "🥘", g: "greek", name: "Shakshuka", type: "dinner", minutes: 35, serves: 4, summary: "Eggs poached in a spiced tomato and pepper sauce, with feta and bread.",
     ingredients: [["Olive oil", "2 tbsp"], ["Onion", "1"], ["Red bell pepper", "1"], ["Garlic", "3 cloves"], ["Cumin", "1 tsp"], ["Paprika", "1 tsp"], ["Crushed red pepper", "a pinch"],
       ["Crushed tomatoes", "28 oz can"], ["Eggs", "6"], ["Feta cheese", "1/2 cup"], ["Parsley", "a handful"], ["Crusty bread", "1 loaf"], ["Salt", "1 tsp"]],
     steps: ["Cook the onion and pepper in the oil for 6 minutes.", "Add the garlic and spices for 1 minute.", "Add the tomatoes and salt and simmer for 10 minutes.",
       "Make 6 wells, crack in the eggs, cover and cook for 7 minutes until the whites set.", "Top with feta and parsley and serve with bread."] },
-  { e: "🧆", g: "med", name: "Falafel Pitas", type: "dinner", minutes: 40, serves: 4, summary: "Crispy chickpea falafel in pita with tahini sauce and salad.",
+  { e: "🧆", g: "greek", name: "Falafel Pitas", type: "dinner", minutes: 40, serves: 4, summary: "Crispy chickpea falafel in pita with tahini sauce and salad.",
     ingredients: [["Chickpeas", "2 cans (15 oz)"], ["Onion", "1 small"], ["Garlic", "3 cloves"], ["Parsley", "1/2 cup"], ["Cumin", "2 tsp"], ["Coriander", "1 tsp"], ["Flour", "1/4 cup"],
       ["Baking powder", "1 tsp"], ["Salt", "1 tsp"], ["Vegetable oil", "for frying"], ["Pita bread", "6"], ["Tomatoes", "2"], ["Cucumber", "1"], ["Tahini", "1/3 cup"], ["Lemon", "1"]],
     steps: ["Drain the chickpeas and pat them very dry.", "Pulse them with the onion, garlic, parsley, spices and salt until coarse. Stir in the flour and baking powder and rest for 10 minutes.",
@@ -4684,7 +4684,7 @@ const MEAL_GROUPS = [
   { k: "italian", s: "world", e: "🇮🇹", name: "Italian", a: "wave" }, { k: "chinese", s: "world", e: "🇨🇳", name: "Chinese", a: "wave" },
   { k: "japanese", s: "world", e: "🇯🇵", name: "Japanese", a: "wave" }, { k: "korean", s: "world", e: "🇰🇷", name: "Korean", a: "wave" },
   { k: "thai", s: "world", e: "🇹🇭", name: "Thai", a: "wave" }, { k: "indian", s: "world", e: "🇮🇳", name: "Indian", a: "wave" },
-  { k: "greek", s: "world", e: "🇬🇷", name: "Greek", a: "wave" }, { k: "med", s: "world", e: "🫒", name: "Mediterranean", a: "hop" }, { k: "southern", s: "world", e: "🤠", name: "Southern & Cajun", a: "sway" },
+  { k: "greek", s: "world", e: "🇬🇷", name: "Greek & Mediterranean", a: "wave" }, { k: "southern", s: "world", e: "🤠", name: "Southern & Cajun", a: "sway" },
   { k: "breakfast", s: "style", e: "🍳", name: "Breakfast", a: "flip" }, { k: "slow", s: "style", e: "🐢", name: "Slow cooker", a: "crawl" },
   { k: "onepot", s: "style", e: "🥘", name: "One-pot & sheet pan", a: "bubble" }, { k: "grill", s: "style", e: "🔥", name: "BBQ & grill", a: "flicker" },
   { k: "soups", s: "style", e: "🍲", name: "Soups & stews", a: "bubble" }, { k: "pasta", s: "style", e: "🍝", name: "Pasta", a: "twirl" },
@@ -4738,11 +4738,11 @@ const inGroup = (m, k) => mealGroups(m).has(k);
 // Which tiles a meal actually sits in. Tags (above) can overlap freely and still drive the chips inside a sheet,
 // but within the "Around the world" and "Ways to cook" rows each meal gets ONE tile, so every tile has its own meals
 // instead of the same dishes again. Its main group wins; otherwise the most specific cuisine
-// (a Greek dish filed under Mediterranean still lands on 🇬🇷 Greek), or the style tile
+// (a Cajun dish lands on 🤠 Southern, not also 🇺🇸 American), or the style tile
 // with the fewest meals so far (meals with fewest choices placed first, so small tiles don't get starved).
 // "Picks for you" (season, 30 min) and "By protein" stay as they are: those are shortcuts across everything.
 const ONE_TILE_ROWS = ["world", "style"];
-const WORLD_LAST = ["med", "american"];   // only if nothing more specific fits: Greek → Greek, not also Mediterranean
+const WORLD_LAST = ["american"];   // only if nothing more specific fits: Cajun → Southern, not also American
 let tileHomeCache = null;
 function tileHomes() {
   if (tileHomeCache) return tileHomeCache;
