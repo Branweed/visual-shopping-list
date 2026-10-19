@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=54";
-import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=54";
-import { MEAL_VERSIONS } from "./meal-versions.js?v=54";
-import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=54";
-import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=54";
+import { MORE_MEALS } from "./meals-more.js?v=55";
+import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=55";
+import { MEAL_VERSIONS } from "./meal-versions.js?v=55";
+import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=55";
+import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=55";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -210,8 +210,8 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-54";
-const RULES_VERSION = "v16";   // must match the _rules/{v} line in firestore.rules
+const APP_VERSION = "2026.10.18-55";
+const RULES_VERSION = "v17";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
   try { await getDocFromServer(doc(db, "_rules", RULES_VERSION)); return true; }
@@ -989,7 +989,7 @@ async function deleteHouseholdData(hid, report) {
   const base = ["households", hid];
   const ops = [];
   report && report("Gathering everything…");
-  for (const c of ["events", "pantry"]) (await getDocsFromServer(collection(db, ...base, c))).forEach(d => ops.push(b => b.delete(d.ref)));
+  for (const c of ["events", "pantry", "nutrition"]) (await getDocsFromServer(collection(db, ...base, c))).forEach(d => ops.push(b => b.delete(d.ref)));
   for (const l of (await getDocsFromServer(collection(db, ...base, "lists"))).docs) {
     (await getDocsFromServer(collection(db, ...base, "lists", l.id, "items"))).forEach(d => ops.push(b => b.delete(d.ref)));
     ops.push(b => b.delete(l.ref));
@@ -1353,7 +1353,7 @@ async function runSecurityCheck() {
     ...(S.admin || !S.catalog.length ? [] : [{ t: "Only the admin can change the main list", expect: "deny", run: () => updateDoc(sdoc("inventory", S.catalog[0].id), { updatedAt: Date.now() }) }]),
     { t: "Other people's private edits are private", expect: "deny", run: () => getDocFromServer(doc(db, "users", rid(), "myItems", "x")) },
     { t: "Other people's price history is private", expect: "deny", run: () => getDocFromServer(doc(db, "users", rid(), "prices", "milk")) },
-    { t: "Other people's label nutrition is private", expect: "deny", run: () => getDocFromServer(doc(db, "users", rid(), "nutrition", "u0123456789")) },
+    { t: "Other households' label nutrition is private", expect: "deny", run: () => getDocsFromServer(query(collection(db, "households", rid(), "nutrition"), limit(1))) },
     { t: "Other households' pantries are private", expect: "deny", run: () => getDocsFromServer(query(collection(db, "households", rid(), "pantry"), limit(1))) },
     { t: "Your pantry works", expect: "ok", run: () => getDocsFromServer(query(pantryCol(), limit(1))),
       tip: "Publish the newest security rules (they add the pantry)." },
@@ -3291,16 +3291,17 @@ const NUT_FIELDS = "product_name,brands,nutriments,serving_size,allergens_tags,l
 let nutVer = 0;
 function nutCached(key) { try { const v = lsGet("nut:" + key); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
 function nutSave(key, v) { lsSet("nut:" + key, JSON.stringify(v)); nutVer++; if (v && v.src === "label") nutPush(key, v); }
-// Label-photo nutrition also goes to your account (users/{me}/nutrition), so every phone you sign in on has it.
-// Barcode lookups aren't synced: any device can fetch those for free. Needs firestore.rules v16.
+// Label-photo nutrition is shared with your household (households/{hid}/nutrition), so every phone in the family has it
+// and nobody photographs the same label twice. Barcode lookups aren't synced: any device can fetch those for free.
+// Needs firestore.rules v17.
 const nutDocId = key => key.startsWith("id:") ? "i" + key.slice(3) : "u" + key;
 const nutKeyOf = id => id[0] === "i" ? "id:" + id.slice(1) : id.slice(1);
 const nutIdOk = id => /^[ui][A-Za-z0-9_-]{1,60}$/.test(id);
-const nutCol = () => collection(db, "users", uid(), "nutrition");
+const nutCol = () => hcol("nutrition");
 function nutPush(key, v) {
   const id = nutDocId(key), json = JSON.stringify(v);
   if (!uid() || !nutIdOk(id) || json.length > 4000) return;
-  setDoc(doc(nutCol(), id), { v: json, t: v.t || Date.now() }).catch(e => console.warn("label sync", e));
+  setDoc(doc(nutCol(), id), { v: json, t: v.t || Date.now(), by: uid() }).catch(e => console.warn("label sync", e));
 }
 let nutUploaded = false;
 function nutFromCloud(snap) {

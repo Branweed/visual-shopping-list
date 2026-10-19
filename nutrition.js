@@ -15,7 +15,7 @@ const FOODS = [
   F(/fish cakes/i, 100, 10, 10),
   F(/cooked (jasmine |white |brown )?rice/i, 130, 2.7, 28, { cup: 158 }),
   F(/\brice\b(?! vinegar| wine| cakes| noodles)|grits/i, 360, 7, 79, { cup: 185 }),
-  F(/barley/i, 352, 10, 78, { cup: 200 }), F(/molasses/i, 290, 0, 75, { cup: 337 }),
+  F(/rhubarb/i, 21, 1, 4.5, { cup: 122 }), F(/barley/i, 352, 10, 78, { cup: 200 }), F(/molasses/i, 290, 0, 75, { cup: 337 }),
   F(/quinoa/i, 368, 14, 64, { cup: 170 }), F(/\boats\b/i, 389, 17, 66, { cup: 80 }),
   F(/ramen/i, 440, 10, 60, { each: 85, pack: 85 }), F(/udon/i, 130, 3, 27, { pack: 200 }), F(/yakisoba/i, 150, 5, 30, { pack: 170 }),
   F(/taco shells|tostada/i, 470, 6, 63, { each: 13 }),
