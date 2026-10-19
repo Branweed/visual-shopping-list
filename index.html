@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.googleapis.com; connect-src 'self' https://api.ocr.space https://world.openfoodfacts.org https://images.openfoodfacts.org https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://www.google.com https://apis.google.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; frame-src https://*.firebaseapp.com https://accounts.google.com https://apis.google.com https://www.google.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<script src="fit.js?v=52"></script>
+<script src="fit.js?v=53"></script>
 <title>Visual Shopping List</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
@@ -469,6 +469,17 @@ details.lens-help summary{font-weight:700;color:var(--primary);cursor:pointer;mi
 .cookbtns{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 2px}
 .plan-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
 .plan-row input{width:22px;height:22px;min-height:0;accent-color:var(--primary)}
+.goals{margin-top:12px;padding:10px 12px;background:#f3f6f4;border-radius:10px}
+.goals summary{cursor:pointer;font-size:15px}
+.goals summary b{font-family:var(--cond);font-size:18px}
+.goalf{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;font-weight:600}
+.goalin{display:flex;align-items:center;gap:6px;flex:none}
+.goalin input{width:90px;min-height:38px;padding:4px 8px;text-align:right}
+.goalin span{font-size:13px;color:var(--muted);width:62px}
+.dayrow{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:14.5px}
+.dayrow:first-of-type{border-top:0}
+.dayrow>b{flex:none;width:88px}
+.lmeta.warn{color:#b45309;font-weight:700}
 .rcost{background:var(--primary-soft);color:var(--primary-dark);border-radius:10px;padding:8px 12px;font-size:14px;margin:8px 0}
 .qmeals .ghead{margin:0 0 4px}.qmeals .ghead h2{margin:0}
 .qgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
@@ -647,6 +658,6 @@ button.havetag,button.need{border:0;cursor:pointer;min-height:0}
 <div class="toast" id="toast" role="status"></div>
 
 <noscript><p style="padding:20px">This app needs JavaScript turned on.</p></noscript>
-<script type="module" src="app.js?v=52"></script>
+<script type="module" src="app.js?v=53"></script>
 </body>
 </html>

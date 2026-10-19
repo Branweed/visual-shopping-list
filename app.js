@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=52";
-import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=52";
-import { MEAL_VERSIONS } from "./meal-versions.js?v=52";
-import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=52";
-import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=52";
+import { MORE_MEALS } from "./meals-more.js?v=53";
+import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=53";
+import { MEAL_VERSIONS } from "./meal-versions.js?v=53";
+import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=53";
+import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=53";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -210,7 +210,7 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-52";
+const APP_VERSION = "2026.10.18-53";
 const RULES_VERSION = "v15";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -5662,36 +5662,127 @@ function boughtFoodsNow() {
 // Do I already have it (or is it already on the shopping list)?
 const haveIt = item => ingStatus(item) !== "need";
 const STAPLES = new Set(["salt", "pepper", "black pepper", "salt and pepper", "water", "olive oil", "vegetable oil", "oil", "cooking spray", "sugar", "flour", "butter", "garlic powder", "onion powder"]);
+// 🎯 Goals for Plan the week: kept on this device. 0 = no target. A planned meal counts as about a third of the day.
+const GOAL_SHARE = 1 / 3;
+function loadGoals() {
+  let g = {};
+  try { g = JSON.parse(lsGet("goals") || "{}") || {}; } catch (e) {}
+  return { protein: +g.protein || 0, kcal: +g.kcal || 0, carbs: +g.carbs || 0, diets: (g.diets || []).filter(d => DIET_KEYS.includes(d)), onlyFit: g.onlyFit !== false };
+}
+const saveGoals = g => lsSet("goals", JSON.stringify(g));
+const goalsOn = g => !!(g.protein || g.kcal || g.carbs || g.diets.length);
+const planNutCache = new WeakMap();
+const planNut = m => { if (!planNutCache.has(m)) planNutCache.set(m, nutrition(m.ingredients, m.serves, productNutrition)); return planNutCache.get(m); };
+// Can this meal be dinner under the goals? Diets must be fine as-is or after swaps; numbers are checked against a third of the day.
+function fitsGoals(m, g) {
+  if (g.diets.some(d => dietStatus(m.ingredients, d, productDiet) === "no")) return false;
+  const n = planNut(m);
+  if (!n.kcal) return !(g.protein || g.kcal || g.carbs);
+  if (g.kcal && n.kcal > g.kcal * GOAL_SHARE * 1.1) return false;
+  if (g.carbs && n.carbs > g.carbs * GOAL_SHARE * 1.1) return false;
+  if (g.protein && n.protein < g.protein * GOAL_SHARE * 0.8) return false;
+  return true;
+}
+// Higher = better fit: more protein when that's the goal, fewer calories/carbs when those are capped.
+function goalScore(m, g) {
+  const n = planNut(m);
+  let s = 0;
+  if (g.protein) s += Math.min(1.5, n.protein / (g.protein * GOAL_SHARE));
+  if (g.kcal) s += 1 - n.kcal / (g.kcal * GOAL_SHARE);
+  if (g.carbs) s += 1 - n.carbs / (g.carbs * GOAL_SHARE);
+  return s;
+}
+const plannable = m => m.type !== "dessert" && m.g !== "desserts" && m.type !== "breakfast" && m.g !== "breakfast" && (m.ingredients || []).length;
+const fmtNut = n => n.kcal ? `~${n.kcal.toLocaleString()} cal · ${n.protein} g protein · ${n.carbs} g carbs` : "";
 // Pick a few meals → put them on days → one shopping list of what's missing, matched to your items and sorted by aisle.
 function planMeals() {
   const all = allMeals();
   const picked = new Map();   // id → date key or ""
   const days = nextDays(7);
   let people = +lsGet("people") || 4;
+  let goals = loadGoals();
+  const setGoals = ch => { goals = { ...goals, ...ch }; saveGoals(goals); draw(); };
   const s = openSheet("Plan your meals");
+  const calMeals = () => (S.events || []).filter(isMealEvent);
   const nextFree = () => {   // the next day without a meal already planned
-    const used = new Set([...picked.values(), ...(S.events || []).filter(isMealEvent).map(ev => ev.date)]);
+    const used = new Set([...picked.values(), ...calMeals().map(ev => ev.date)]);
     const d = days.find(x => !used.has(x.key)); return d ? d.key : "";
+  };
+  // ✨ Fill every free day with a meal that fits, mixing up the main protein from one day to the next.
+  const fillWeek = () => {
+    const pool = all.filter(m => plannable(m) && !picked.has(m.id) && fitsGoals(m, goals));
+    if (!pool.length) { toast("No meals fit those goals. Try loosening one."); return; }
+    let added = 0, lastP = "";
+    for (let d = nextFree(); d; d = nextFree()) {
+      const left = pool.filter(m => !picked.has(m.id));
+      if (!left.length) break;
+      const ranked = left.map(m => ({ m, s: goalScore(m, goals) + Math.random() * 0.6 - (proteinsOf(m).keys[0] === lastP && lastP ? 0.5 : 0) }))
+        .sort((a, b) => b.s - a.s);
+      const m = ranked[0].m;
+      picked.set(m.id, d); lastP = proteinsOf(m).keys[0] || ""; added++;
+    }
+    toast(added ? `Picked ${added} meal${added === 1 ? "" : "s"}. Tap ✨ again for different ones.` : "Every day this week already has a meal");
+    draw();
+  };
+  const goalsCard = () => {
+    const num = (key, label, unit, ph) => h("label", { class: "goalf" }, h("span", { text: label }),
+      h("span", { class: "goalin" }, h("input", { type: "number", inputmode: "numeric", min: "0", max: "9999", placeholder: ph, value: goals[key] || "",
+        onchange: e => setGoals({ [key]: Math.max(0, Math.min(9999, parseInt(e.target.value, 10) || 0)) }) }), h("span", { text: unit })));
+    return h("details", { class: "goals", ...(goalsOn(goals) ? {} : { open: "" }) },
+      h("summary", {}, h("b", { text: "🎯 Goals" }), h("span", { class: "lmeta", text: goalsOn(goals)
+        ? " " + [goals.protein ? `${goals.protein} g protein+` : "", goals.kcal ? `under ${goals.kcal.toLocaleString()} cal` : "", goals.carbs ? `under ${goals.carbs} g carbs` : "",
+          ...goals.diets.map(d => DIETS[d].name)].filter(Boolean).join(" · ") : " none yet" })),
+      h("p", { class: "lmeta", text: "Per person, per day. Each planned meal counts as about a third of your day, so a 150 g protein goal looks for dinners with 40 g or more." }),
+      num("protein", "Protein at least", "g / day", "e.g. 150"), num("kcal", "Calories under", "cal / day", "e.g. 2000"), num("carbs", "Carbs under", "g / day", "e.g. 100"),
+      h("div", { class: "fchips", style: "margin-top:8px" }, DIET_KEYS.map(d => { const on = goals.diets.includes(d);
+        return h("button", { type: "button", class: "fchip" + (on ? " on" : ""), "aria-pressed": String(on),
+          onclick: () => setGoals({ diets: on ? goals.diets.filter(x => x !== d) : [...goals.diets, d] }) }, `${DIETS[d].e} ${DIETS[d].name} only`); })),
+      goalsOn(goals) ? h("button", { type: "button", class: "btn block", style: "margin-top:8px", text: "Clear goals", onclick: () => setGoals({ protein: 0, kcal: 0, carbs: 0, diets: [] }) }) : null);
+  };
+  // Each day: what's planned (here or already on the calendar), its totals, and what's left of the day's goals.
+  const daysCard = () => {
+    const rows = days.map(d => {
+      const ms = [...all.filter(m => picked.get(m.id) === d.key), ...calMeals().filter(ev => ev.date === d.key).map(ev => mealByName(String(ev.title).slice(MEAL_MARK.length))).filter(Boolean)];
+      const t = ms.reduce((a, m) => { const n = planNut(m); return { kcal: a.kcal + n.kcal, protein: a.protein + n.protein, carbs: a.carbs + n.carbs }; }, { kcal: 0, protein: 0, carbs: 0 });
+      const rest = [goals.kcal ? `${Math.max(0, goals.kcal - t.kcal).toLocaleString()} cal` : "", goals.protein ? `${Math.max(0, goals.protein - t.protein)} g protein` : "",
+        goals.carbs ? `${Math.max(0, goals.carbs - t.carbs)} g carbs` : ""].filter(Boolean);
+      const over = (goals.kcal && t.kcal > goals.kcal) || (goals.carbs && t.carbs > goals.carbs);
+      return h("div", { class: "dayrow" }, h("b", { text: d.label }),
+        h("div", { style: "flex:1;min-width:0" },
+          h("div", { text: ms.length ? ms.map(m => (m.e ? m.e + " " : "") + m.name).join(", ") : "Nothing planned" }),
+          ms.length ? h("div", { class: "lmeta", text: fmtNut(t) || "No estimate" }) : null,
+          ms.length && rest.length ? h("div", { class: "lmeta" + (over ? " warn" : ""), text: over ? "Over the day's goal" : `Rest of the day: ${rest.join(", ")} to go` }) : null));
+    });
+    return h("details", { class: "goals", open: "" }, h("summary", {}, h("b", { text: "📅 This week" }), h("span", { class: "lmeta", text: " per person" })), rows);
   };
   const draw = () => {
     s.body.textContent = "";
+    const on = goalsOn(goals);
     const row = r => {
-      const on = picked.has(r.id);
+      const isOn = picked.has(r.id), n = planNut(r), fit = on && fitsGoals(r, goals);
       return h("div", { class: "plan-row" },
-        h("input", { type: "checkbox", checked: on, "aria-label": "Plan " + r.name, onchange: e => { e.target.checked ? picked.set(r.id, nextFree()) : picked.delete(r.id); draw(); } }),
-        h("div", { style: "flex:1;min-width:0" }, h("b", { text: (r.e ? r.e + " " : "★ ") + (r.savedQuick ? "★ " : "") + r.name }),
-          h("div", { class: "lmeta", text: [r.minutes ? fmtMins(r.minutes) : "", `${(r.ingredients || []).length} ingredients`].filter(Boolean).join(" · ") })),
-        on ? h("select", { class: "daysel", "aria-label": "Day for " + r.name, onchange: e => { picked.set(r.id, e.target.value); } },
+        h("input", { type: "checkbox", checked: isOn, "aria-label": "Plan " + r.name, onchange: e => { e.target.checked ? picked.set(r.id, nextFree()) : picked.delete(r.id); draw(); } }),
+        h("div", { style: "flex:1;min-width:0" }, h("b", { text: (r.e ? r.e + " " : "★ ") + (r.savedQuick ? "★ " : "") + r.name + (fit ? " 🎯" : "") }),
+          h("div", { class: "lmeta", text: [r.minutes ? fmtMins(r.minutes) : "", n.kcal ? `~${n.kcal} cal · ${n.protein} g protein` : `${(r.ingredients || []).length} ingredients`].filter(Boolean).join(" · ") })),
+        isOn ? h("select", { class: "daysel", "aria-label": "Day for " + r.name, onchange: e => { picked.set(r.id, e.target.value); draw(); } },
           h("option", { value: "", text: "No day", selected: !picked.get(r.id) }),
           days.map(d => h("option", { value: d.key, text: d.label, selected: picked.get(r.id) === d.key }))) : null);
     };
+    // With goals on, the list shows only meals that fit (plus anything you already ticked), unless you switch that off.
+    const shown = m => !on || !goals.onlyFit || picked.has(m.id) || (plannable(m) || m.g === "mine") && fitsGoals(m, goals);
+    const fitCount = on ? all.filter(m => plannable(m) && fitsGoals(m, goals)).length : 0;
     put(s.body,
-      h("p", { class: "msg", text: "Tick the meals you want and pick a day for each. They go on your calendar, and you get one shopping list of everything you're missing, with amounts added up across meals." }),
+      h("p", { class: "msg", text: "Tick the meals you want and pick a day for each, or let ✨ fill the week. They go on your calendar, and you get one shopping list of everything you're missing, with amounts added up across meals." }),
+      goalsCard(),
+      h("button", { class: "btn violet block", type: "button", style: "margin-top:10px", text: on ? `✨ Fill the week with meals that fit (${fitCount})` : "✨ Fill the week for me", onclick: fillWeek }),
+      daysCard(),
       h("div", { class: "rserve" }, h("b", { text: "Cooking for" }),
         h("div", { class: "seg", role: "group", "aria-label": "Cooking for" }, peopleOptions(people).map(n => h("button", { type: "button", class: "segb" + (people === n ? " on" : ""), "aria-pressed": String(people === n),
           text: `${n}`, onclick: () => { people = n; lsSet("people", String(n)); draw(); } })),
           h("button", { type: "button", class: "segb", text: "Other…", onclick: async () => { const n = await askPeople(people); if (n) { people = n; lsSet("people", String(n)); draw(); } } }))),
-      MEAL_GROUPS.filter(g => g.s !== "region").map(g => { const ms = all.filter(m => mealHome(m) === g.k); return ms.length ? [h("h3", { class: "rh", text: `${g.e} ${g.name}` }), ms.map(row)] : null; }).flat(2).filter(Boolean),
+      on ? h("label", { class: "plan-row", style: "border-top:0" }, h("input", { type: "checkbox", checked: goals.onlyFit, onchange: e => setGoals({ onlyFit: e.target.checked }) }),
+        h("span", { text: "Only show meals that fit my goals 🎯" })) : null,
+      MEAL_GROUPS.filter(g => g.s !== "region").map(g => { const ms = all.filter(m => mealHome(m) === g.k && shown(m)); return ms.length ? [h("h3", { class: "rh", text: `${g.e} ${g.name}` }), ms.map(row)] : null; }).flat(2).filter(Boolean),
       h("div", { class: "stickybar" }, h("button", { class: "btn green block", type: "button", disabled: !picked.size,
         text: picked.size ? `Plan ${picked.size} meal${picked.size === 1 ? "" : "s"} & build the list` : "Pick at least one meal",
         onclick: async () => {
@@ -5700,7 +5791,9 @@ function planMeals() {
           let n = 0;
           for (const r of chosen) { const d = picked.get(r.id); if (d) { await planMealOn(r.name, d); n++; } }
           if (n) toast(`${n} meal${n === 1 ? "" : "s"} on the calendar`);
-          recipesToList(chosen.map(r => r.quick ? quickRecipe(r) : cleanIdea(r) || r), people);
+          // Gluten-free / dairy-free goals: the list gets the swapped ingredients.
+          const withDiets = r => goals.diets.reduce((x, d) => dietStatus(x.ingredients, d, productDiet) === "swap" ? applyDiet(x, d, productDiet) : x, r);
+          recipesToList(chosen.map(r => withDiets(r.quick ? quickRecipe(r) : cleanIdea(r) || r)), people);
         } })));
   };
   draw();
