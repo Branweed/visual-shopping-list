@@ -1,8 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=51";
-import { MEAL_VERSIONS } from "./meal-versions.js?v=51";
-import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=51";
-import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=51";
+import { MORE_MEALS } from "./meals-more.js?v=52";
+import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=52";
+import { MEAL_VERSIONS } from "./meal-versions.js?v=52";
+import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=52";
+import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=52";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -209,7 +210,7 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-51";
+const APP_VERSION = "2026.10.18-52";
 const RULES_VERSION = "v15";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -4868,7 +4869,7 @@ const QUICK_MEALS = [
     ingredients: [["Thick bread or Portuguese sweet bread", "8 slices"], ["Eggs", "4"], ["Milk", "1 cup"], ["Cinnamon", "1 tsp"], ["Vanilla", "1 tsp"], ["Sugar", "1 tbsp"], ["Butter", "2 tbsp"], ["Maple syrup", "to serve"]],
     steps: ["Whisk the eggs, milk, cinnamon, vanilla and sugar.", "Dip each slice for 10 seconds per side.", "Cook in butter over medium heat for 3 minutes per side until golden. Serve with syrup."] }
 
-, ...MORE_MEALS].map(m => ({ ...m, g: MEAL_REGROUP[m.name] || m.g, t: [m.t || "", MEAL_TAGS[m.name] || "", REGION_OF[m.name] || ""].join(" ").trim(),
+, ...MORE_MEALS, ...SEASONAL_MEALS].map(m => ({ ...m, g: MEAL_REGROUP[m.name] || m.g, t: [m.t || "", MEAL_TAGS[m.name] || "", REGION_OF[m.name] || "", SEASON_TAGS[m.name] || ""].join(" ").trim(),
   id: "q-" + slug(m.name), quick: true, v: MEAL_VERSIONS[m.name] || null, ingredients: m.ingredients.map(([item, amount]) => ({ item, amount, have: false })) }));
 // One version of a meal (see meal-versions.js): the base recipe with that version's swaps, extra ingredients and rewritten steps.
 // Versions always start from the built-in recipe, even when you've saved your own copy of the base.
@@ -5064,7 +5065,7 @@ const MEAL_SECTIONS = [["top", "Picks for you"], ["health", "Healthy & diet"], [
 const SEASONS = { winter: { e: "❄️", name: "Winter warmers", a: "spin" }, spring: { e: "🌸", name: "Spring picks", a: "spin" },
   summer: { e: "☀️", name: "Summer picks", a: "spin" }, fall: { e: "🍂", name: "Fall favorites", a: "leaf" } };
 const seasonNow = (d = new Date()) => ["winter", "winter", "spring", "spring", "spring", "summer", "summer", "summer", "fall", "fall", "fall", "winter"][d.getMonth()];
-const SEASON_GROUPS = { winter: ["soups", "slow"], spring: ["salads"], summer: ["grill", "salads"], fall: ["soups", "slow"] };
+const SEASON_KEYS = ["winter", "spring", "summer", "fall"];
 const MEAL_GROUPS = [
   { k: "season", s: "top", ...SEASONS[seasonNow()] }, { k: "quick", s: "top", e: "⚡", name: "30 min or less", a: "zap" }, { k: "mine", s: "top", e: "⭐", name: "My recipes", a: "spin" },
   { k: "hiprotein", s: "health", e: "💪", name: "High protein", a: "hop" }, { k: "light", s: "health", e: "⚖️", name: "Lighter meals", a: "sway" },
@@ -5157,7 +5158,7 @@ function mealGroups(m) {
   // Healthy & diet: from the estimated nutrition and the gluten/dairy check, counting every version of the meal.
   for (const k of [...healthTags(m), ...mealVersionKeys(m).flatMap(v => [...healthTags(mealVersion(m, v))])]) out.add(k);
   const sz = seasonNow();
-  if (out.has(sz) || SEASON_GROUPS[sz].some(k => out.has(k) && k === m.g)) out.add("season");
+  if (out.has(sz)) out.add("season");   // only meals tagged for this season (see seasonal.js), not every soup
   mealTagCache.set(m, out);
   return out;
 }
@@ -5254,20 +5255,27 @@ function openGroup(k) {
   const g = MEAL_GROUPS.find(x => x.k === k);
   const s = openSheet(`${g.e} ${g.name}`);
   const picked = new Set();
+  // 🍂 The seasonal tile opens on this season; the switcher at the top flips to any other one to look ahead.
+  let sz = seasonNow();
+  const seasonRow = () => k !== "season" ? null : h("div", { class: "fchips", role: "group", "aria-label": "Season", style: "margin-bottom:6px" },
+    SEASON_KEYS.map(x => h("button", { type: "button", class: "fchip" + (x === sz ? " on" : ""), "aria-pressed": String(x === sz),
+      onclick: () => { sz = x; picked.clear(); s.setTitle(`${SEASONS[x].e} ${SEASONS[x].name}`); draw(); } },
+      `${SEASONS[x].e} ${SEASONS[x].name}`, x === seasonNow() ? h("span", { class: "fn", text: "now" }) : "")));
   const draw = () => {
     s.body.textContent = "";
-    const base = allMeals().filter(m => inTile(m, k));
+    const base = k === "season" ? allMeals().filter(m => inGroup(m, sz)) : allMeals().filter(m => inTile(m, k));
     const meals = base.filter(m => [...picked].every(p => inGroup(m, p)));
     const order = k === "american" ? [...MEAL_GROUPS.filter(o => o.s === "region"), ...MEAL_GROUPS.filter(o => o.s !== "region")] : MEAL_GROUPS.filter(o => o.s !== "region");
     const chips = order.filter(o => o.k !== k && o.k !== "mine").map(o => ({ o, n: meals.filter(m => inGroup(m, o.k)).length }))
       .filter(({ o, n }) => picked.has(o.k) || (n > 0 && n < meals.length));
     put(s.body,
+      seasonRow(),
       chips.length ? h("div", { class: "fchips", role: "group", "aria-label": "Narrow it down" },
         picked.size ? h("button", { type: "button", class: "fchip clear", text: "✕ Clear", onclick: () => { picked.clear(); draw(); } }) : null,
         chips.map(({ o, n }) => h("button", { type: "button", class: "fchip" + (picked.has(o.k) ? " on" : ""), "aria-pressed": String(picked.has(o.k)),
           onclick: () => { picked.has(o.k) ? picked.delete(o.k) : picked.add(o.k); draw(); } }, `${o.e} ${o.name}`, picked.has(o.k) ? "" : h("span", { class: "fn", text: String(n) })))) : null,
       picked.size ? h("p", { class: "lmeta", style: "margin:6px 2px 0", text: `${meals.length} of ${base.length} meals` }) : null,
-      meals.length ? h("div", { class: "qgrid" }, meals.map(m => mealTile(m, [k, ...picked])))
+      meals.length ? h("div", { class: "qgrid" }, meals.map(m => mealTile(m, [k === "season" ? sz : k, ...picked])))
         : h("div", { class: "empty small" }, h("b", { text: k === "mine" ? "No recipes of your own yet" : "Nothing here yet" }),
             k === "mine" ? "Add one from a photo, pasted text, or type it in. Tap ★ Save on any recipe to keep it here too." : "Recipes you add that fit here show up automatically."),
       h("button", { class: "btn block", type: "button", style: "margin-top:12px", text: "＋ Add a recipe", onclick: () => { s.close(); addRecipeFlow(); } }));

@@ -1,0 +1,82 @@
+// Seasonal meals. The 🍂/❄️/🌸/☀️ tile on the Meals tab switches by date (Sep–Nov fall, Dec–Feb winter,
+// Mar–May spring, Jun–Aug summer) and shows ONLY meals tagged with that season. Inside the tile you can
+// flip to any other season to look ahead.
+//
+// To add meals for a season: put new recipes in SEASONAL_MEALS (same shape as meals-more.js, with the season
+// in t:), or add an existing meal's name to SEASON_TAGS. Nutrition, protein and diet tiles work automatically.
+
+// Existing built-in meals that also belong to a season.
+export const SEASON_TAGS = {
+  "Chicken & Dumplings": "winter",
+  "Slow Cooker Swedish Meatballs": "winter",
+  "Galbi Jjim (Braised Short Ribs)": "winter",
+  "Chicken & Sausage Gumbo": "winter fall",
+  "Red Lentil Dal": "winter",
+  "Spaghetti Bolognese": "winter"
+};
+
+export const SEASONAL_MEALS = [
+  /* ---------- ❄️ Winter starter set ---------- */
+  { e: "🥣", g: "soups", t: "onepot comfort winter", name: "Beef & Barley Soup", type: "dinner", minutes: 105, serves: 6,
+    summary: "Thick, hearty soup with tender beef, barley, carrots and mushrooms.",
+    ingredients: [["Beef stew meat", "1 1/2 lb"], ["Olive oil", "1 tbsp"], ["Onions", "1"], ["Carrots", "3"], ["Celery", "2 stalks"], ["Mushrooms", "8 oz"], ["Garlic", "3 cloves"],
+      ["Tomato paste", "2 tbsp"], ["Beef broth", "8 cups"], ["Pearl barley", "3/4 cup"], ["Thyme", "1 tsp"], ["Bay leaves", "2"], ["Salt", "1 tsp"], ["Black pepper", "1/2 tsp"]],
+    steps: ["Cut the beef into small cubes and season with the salt and pepper. Brown it in the oil in a large pot over medium-high heat, about 6 minutes. Move it to a plate.",
+      "Chop the onion, carrots, celery and mushrooms. Cook them in the same pot for 6 minutes. Add the garlic and tomato paste and stir 1 minute.",
+      "Add the broth, thyme, bay leaves and the beef. Bring to a boil, cover and simmer for 45 minutes.",
+      "Rinse the barley, stir it in and simmer uncovered for 40 more minutes until the barley and beef are tender. Take out the bay leaves and taste for salt."] },
+  { e: "🥔", g: "soups", t: "comfort kids winter", name: "Loaded Baked Potato Soup", type: "dinner", minutes: 45, serves: 6,
+    summary: "Creamy potato soup topped like a baked potato: bacon, cheddar, sour cream and green onions.",
+    ingredients: [["Bacon", "6 slices"], ["Onions", "1"], ["Russet potatoes", "3 lb"], ["Chicken broth", "4 cups"], ["Milk", "2 cups"], ["Butter", "3 tbsp"], ["Flour", "1/4 cup"],
+      ["Shredded cheddar cheese", "1 1/2 cups"], ["Sour cream", "1/2 cup"], ["Green onions", "3"], ["Salt", "1 1/2 tsp"], ["Black pepper", "1/2 tsp"]],
+    steps: ["Cook the bacon in a large pot until crisp. Crumble it and pour off all but 1 tablespoon of the fat.",
+      "Chop the onion and cook it in the pot for 5 minutes. Add the butter, then stir in the flour for 1 minute.",
+      "Peel and cube the potatoes. Slowly whisk in the broth, add the potatoes, and simmer 15 minutes until tender.",
+      "Mash about half the potatoes right in the pot. Stir in the milk and 1 cup of the cheddar and heat through without boiling. Season.",
+      "Serve topped with the bacon, the rest of the cheese, sour cream and sliced green onions."] },
+  { e: "🧅", g: "soups", t: "comfort winter", name: "French Onion Soup", type: "dinner", minutes: 85, serves: 4,
+    summary: "Deeply caramelized onions in rich beef broth under a melted Gruyère toast.",
+    ingredients: [["Yellow onions", "6 large"], ["Butter", "4 tbsp"], ["Sugar", "1 tsp"], ["Flour", "2 tbsp"], ["Dry white wine", "1/2 cup"], ["Beef broth", "6 cups"], ["Thyme", "1 tsp"],
+      ["Bay leaves", "1"], ["Crusty bread", "8 slices"], ["Gruyère cheese", "2 cups shredded"], ["Salt", "1 tsp"], ["Black pepper", "1/2 tsp"]],
+    steps: ["Slice the onions thin. Melt the butter in a large pot, add the onions, sugar and salt, and cook over medium-low heat for 45 minutes, stirring now and then, until deep brown.",
+      "Stir in the flour for 1 minute, then the wine, scraping the bottom. Add the broth, thyme and bay leaf and simmer 20 minutes. Take out the bay leaf and add pepper.",
+      "Toast the bread. Heat the broiler.", "Ladle the soup into oven-safe bowls on a baking sheet, top each with 2 toasts and a pile of Gruyère, and broil 2 to 3 minutes until bubbly and browned."] },
+  { e: "🍖", g: "comfort", t: "onepot winter", name: "Braised Beef Short Ribs", type: "dinner", minutes: 200, serves: 6,
+    summary: "Fall-apart short ribs braised in red wine and broth. Great over mashed potatoes.",
+    ingredients: [["Bone-in short ribs", "4 lb"], ["Salt", "2 tsp"], ["Black pepper", "1 tsp"], ["Olive oil", "2 tbsp"], ["Onions", "1"], ["Carrots", "2"], ["Celery", "2 stalks"],
+      ["Garlic", "4 cloves"], ["Tomato paste", "2 tbsp"], ["Dry red wine", "2 cups"], ["Beef broth", "2 cups"], ["Thyme", "4 sprigs"], ["Bay leaves", "2"], ["Potatoes", "3 lb"]],
+    steps: ["Heat the oven to 325°F. Season the ribs with salt and pepper and brown them well on all sides in the oil in a Dutch oven, in batches, about 10 minutes. Set aside.",
+      "Chop the onion, carrots and celery and cook them in the pot for 6 minutes. Add the garlic and tomato paste and stir 1 minute.",
+      "Pour in the wine and simmer 5 minutes, scraping the bottom. Add the broth, thyme, bay leaves and ribs (bone side up).",
+      "Cover and braise in the oven for 2 1/2 to 3 hours until the meat pulls away from the bone.",
+      "Meanwhile boil and mash the potatoes. Skim the fat off the sauce and serve the ribs and sauce over the potatoes."] },
+  { e: "🫘", g: "soups", t: "italian onepot budget winter", name: "Tuscan White Bean & Sausage Soup", type: "dinner", minutes: 40, serves: 6,
+    summary: "Italian sausage, cannellini beans and kale in a garlicky broth with parmesan.",
+    ingredients: [["Italian sausage", "1 lb"], ["Onions", "1"], ["Carrots", "2"], ["Garlic", "4 cloves"], ["Cannellini beans", "2 cans (15 oz)"], ["Diced tomatoes", "1 can (14 oz)"],
+      ["Chicken broth", "6 cups"], ["Kale", "1 bunch"], ["Italian seasoning", "1 tsp"], ["Parmesan", "1/2 cup grated"], ["Crusty bread", "1 loaf"]],
+    steps: ["Remove the sausage from its casings and brown it in a large pot, breaking it up, for 6 minutes.",
+      "Add the chopped onion and carrots and cook 5 minutes. Add the garlic and Italian seasoning for 1 minute.",
+      "Add the drained beans, tomatoes and broth. Simmer 15 minutes.", "Strip the kale from its stems, chop it, and stir it in for 5 minutes until tender. Serve with parmesan and crusty bread."] },
+  { e: "🌶️", g: "comfort", t: "onepot slow winter", name: "Hungarian Beef Goulash", type: "dinner", minutes: 150, serves: 6,
+    summary: "Slow-simmered beef and onions in a smoky paprika gravy, served over egg noodles.",
+    ingredients: [["Beef chuck", "2 1/2 lb"], ["Vegetable oil", "2 tbsp"], ["Onions", "3"], ["Garlic", "3 cloves"], ["Sweet paprika", "3 tbsp"], ["Caraway seeds", "1 tsp"], ["Tomato paste", "2 tbsp"],
+      ["Beef broth", "3 cups"], ["Red bell pepper", "1"], ["Salt", "1 1/2 tsp"], ["Egg noodles", "12 oz"], ["Sour cream", "1/2 cup"]],
+    steps: ["Cut the beef into 1 1/2 inch cubes and season with salt. Brown it in the oil in a Dutch oven, in batches. Set aside.",
+      "Slice the onions and cook them in the pot for 10 minutes until golden. Add the garlic, paprika, caraway and tomato paste and stir 1 minute (don't let the paprika burn).",
+      "Add the broth and beef. Cover and simmer gently for 1 1/2 hours.", "Add the sliced bell pepper and simmer 30 more minutes until the beef is very tender.",
+      "Cook the egg noodles. Serve the goulash over the noodles with a spoonful of sour cream."] },
+  { e: "🦃", g: "soups", t: "onepot comfort winter", name: "Turkey & Wild Rice Soup", type: "dinner", minutes: 60, serves: 6,
+    summary: "Creamy Minnesota-style soup with turkey, wild rice and vegetables. A great use for leftover turkey.",
+    ingredients: [["Turkey breast", "1 1/2 lb"], ["Butter", "4 tbsp"], ["Onions", "1"], ["Carrots", "2"], ["Celery", "2 stalks"], ["Flour", "1/3 cup"], ["Chicken broth", "6 cups"],
+      ["Wild rice blend", "3/4 cup"], ["Half-and-half", "1 cup"], ["Thyme", "1 tsp"], ["Salt", "1 tsp"], ["Black pepper", "1/2 tsp"]],
+    steps: ["Melt the butter in a large pot and cook the chopped onion, carrots and celery for 6 minutes.", "Stir in the flour for 1 minute, then slowly whisk in the broth.",
+      "Add the wild rice and thyme and simmer, covered, for 35 minutes until the rice is tender. (Use cooked leftover turkey? Skip the next step.)",
+      "Meanwhile cut the turkey into bite-size pieces and add it for the last 15 minutes so it cooks through.", "Stir in the half-and-half, heat through and season with salt and pepper."] },
+  { e: "🍪", g: "desserts", t: "kids winter", name: "Gingerbread Cookies", type: "dessert", minutes: 75, waitMinutes: 60, serves: 24,
+    summary: "Soft, spiced cut-out cookies for decorating.",
+    ingredients: [["Flour", "3 cups"], ["Ground ginger", "1 tbsp"], ["Cinnamon", "1 1/2 tsp"], ["Ground cloves", "1/4 tsp"], ["Baking soda", "1 tsp"], ["Salt", "1/2 tsp"],
+      ["Butter", "3/4 cup"], ["Brown sugar", "3/4 cup"], ["Molasses", "1/2 cup"], ["Eggs", "1"], ["Vanilla", "1 tsp"], ["Powdered sugar", "1 cup"], ["Milk", "1 tbsp"]],
+    steps: ["Whisk the flour, ginger, cinnamon, cloves, baking soda and salt in a bowl.", "Beat the soft butter and brown sugar until fluffy, then beat in the molasses, egg and vanilla. Mix in the dry ingredients.",
+      "Split the dough in half, flatten into disks, wrap and chill for 1 hour.", "Heat the oven to 350°F. Roll the dough 1/4 inch thick on a floured counter, cut shapes and bake on lined sheets for 8 to 10 minutes.",
+      "Cool completely. Stir the powdered sugar and milk into a thick icing and decorate."] }
+];
