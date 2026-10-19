@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=55";
-import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=55";
-import { MEAL_VERSIONS } from "./meal-versions.js?v=55";
-import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=55";
-import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=55";
+import { MORE_MEALS } from "./meals-more.js?v=56";
+import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=56";
+import { MEAL_VERSIONS } from "./meal-versions.js?v=56";
+import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=56";
+import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=56";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -210,7 +210,7 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-55";
+const APP_VERSION = "2026.10.18-56";
 const RULES_VERSION = "v17";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -1457,6 +1457,8 @@ function renderChips() {
 }
 
 function renderList() {
+  if (shopMode) shopMode.draw();
+  if (compareSheet) compareSheet();
   const host = $("#listBody");
   host.textContent = "";
   if (!S.ready.items) { host.append(h("div", { class: "empty", text: "Loading…" })); return; }
@@ -1475,6 +1477,8 @@ function renderList() {
     h("div", {}, h("div", { class: "lbl", text: "In cart" }), h("b", { text: money(sum(checked, lineTotal)) })),
     h("div", {}, h("div", { class: "lbl", text: "Done" }), h("b", { text: `${checked.length}/${items.length}` }))),
     h("p", { class: "totnote", text: "Estimate before tax and bottle deposits." + (items.some(isPerLb) ? " ≈ items are sold by weight." : "") }));
+  const cmp = compareBar(items);
+  if (cmp) host.append(cmp);
   if (checked.length) host.append(h("div", { class: "links" },
     h("button", { class: "link", text: S.hideChecked ? `Show checked (${checked.length})` : "Hide checked",
       onclick: () => { S.hideChecked = !S.hideChecked; lsSet("hideChecked", S.hideChecked ? "1" : "0"); renderList(); } }),
@@ -1490,7 +1494,9 @@ function renderList() {
     if (S.hideChecked) rows = rows.filter(i => !i.inCart);
     if (!rows.length) continue;
     host.append(h("section", { class: "group" },
-      h("div", { class: "ghead" }, h("h2", { text: k }), h("span", { text: money(sum(all, lineTotal)) })),
+      h("div", { class: "ghead" }, h("h2", { text: k }),
+        h("div", { class: "gright" }, all.some(i => !i.inCart) ? h("button", { class: "shopbtn", type: "button", "aria-label": "Shopping mode for " + k, text: "🛒 Shop", onclick: () => openShopMode(k) }) : null,
+          h("span", { text: money(sum(all, lineTotal)) }))),
       h("div", { class: "gcard" }, rows.map(listRow))));
   }
 }
@@ -1521,7 +1527,9 @@ function listRow(it) {
     h("button", { class: "lbody", onclick: () => openListItem(it) },
       thumbEl(it.image, "thumb"),
       h("div", { class: "ltext" }, h("div", { class: "lname", text: it.name || "Untitled" }), it.note ? h("div", { class: "lnote", text: it.note }) : null, meta,
-        cheap ? h("div", { class: "hint cheap", text: `💡 ${money(cheap.p)}${isPerLb(it) ? "/lb" : ""} at ${cheap.s}` }) : null,
+        cheap ? h("span", { class: "hint cheap move", role: "button", tabindex: "0", "aria-label": `Move ${it.name} to ${cheap.s} for ${money(cheap.p)}`,
+          onclick: e => { e.stopPropagation(); moveItems([{ it, s: cheap.s, p: cheap.p }], `${it.name} moved to ${cheap.s}`); } },
+          `💡 ${money(cheap.p)}${isPerLb(it) ? "/lb" : ""} at ${cheap.s}`, h("u", { text: "Move" })) : null,
         home && home.level === "plenty" ? h("div", { class: "hint home", text: `🏠 Pantry says you have some (${placeOf(home.where)[2].toLowerCase()})` }) : null),
       aisleSign(it.aisle)),
     h("button", { class: "x", "aria-label": "Remove " + it.name, text: "✕", onclick: () => removeListItem(it) }));
@@ -6435,6 +6443,123 @@ function cheaperAt(it) {
     if (pt.p <= mine * 0.95 && mine - pt.p >= 0.1 && (!best || pt.p < best.p)) best = pt;
   });
   return best;
+}
+// 🏷️ Compare stores: what the open items on this list cost at each of your stores, from your price history and saved items.
+// An item with no price at a store counts at its list price there, so every store's total covers the same items.
+function listCompare(items) {
+  const open = items.filter(i => !i.inCart);
+  const rows = open.map(it => {
+    const per = isPerLb(it) ? "lb" : "", n = isPerLb(it) ? lbsOf(it) : qtyOf(it), mine = priceNum(it.price);
+    const at = latestByStore(it.name, per);
+    if (mine > 0 && it.store && !at.has(it.store)) at.set(it.store, { p: mine, s: it.store, d: 0, per });
+    let best = null;
+    at.forEach(pt => { if (!best || pt.p < best.p) best = pt; });
+    return { it, n, at, mine: mine > 0 ? mine : null, best };
+  });
+  const byStore = storeNames().map(s => {
+    let total = 0, priced = 0, missing = 0;
+    rows.forEach(r => { const pt = r.at.get(s); if (pt) { total += pt.p * r.n; priced++; } else { total += (r.mine || 0) * r.n; missing++; } });
+    return { s, total, priced, missing };
+  }).filter(x => x.priced > 0).sort((a, b) => a.total - b.total);
+  const now = rows.reduce((a, r) => a + (r.mine || 0) * r.n, 0);
+  const moves = rows.filter(r => r.best && r.mine != null && r.best.s !== r.it.store && r.best.p <= r.mine * 0.95 && r.mine - r.best.p >= 0.1);
+  const mix = now - moves.reduce((a, r) => a + (r.mine - r.best.p) * r.n, 0);
+  return { rows, byStore, now, mix, moves, count: open.length };
+}
+// Move a list item to another store at that store's price, matched to your saved item there when there is one.
+function moveUpdate(it, s, p) {
+  const per = isPerLb(it) ? "lb" : "";
+  const inv = (invByFood().get(norm(foodName(it.name) || it.name)) || []).find(i => i.store === s && (isPerLb(i) ? "lb" : "") === per);
+  return { store: clip(s, 80), price: cleanPrice(p), inventoryId: inv ? inv.id : null, aisle: inv ? clip(inv.aisle, 40) : "", ...(inv && inv.image ? { image: cleanImage(inv.image) } : {}) };
+}
+async function moveItems(list, label) {
+  const undo = [];
+  try {
+    for (const { it, s, p } of list) {
+      const o = it._orig || it;
+      undo.push([it.id, { store: o.store || "Other", price: cleanPrice(o.price), inventoryId: o.inventoryId || null, aisle: o.aisle || "", image: o.image || "" }]);
+      await updateDoc(itemDoc(S.listId, it.id), moveUpdate(it, s, p));
+    }
+  } catch (e) { fail(e); return; }
+  toast(label, { label: "Undo", fn: () => undo.forEach(([id, u]) => updateDoc(itemDoc(S.listId, id), u).catch(fail)) });
+}
+function compareBar(items) {
+  const c = listCompare(items);
+  if (c.byStore.length < 2 && !c.moves.length) return null;
+  const save = c.now - c.mix, best = c.byStore[0];
+  return h("button", { class: "needbar cmpbar", type: "button", onclick: openCompare },
+    h("span", { class: "nb-dot", text: "🏷️" }),
+    h("div", {}, h("b", { text: save >= 0.5 ? `Save about ${money(save)} by switching ${c.moves.length} item${c.moves.length === 1 ? "" : "s"}` : `Cheapest store: ${best.s} ≈ ${money(best.total)}` }),
+      h("div", { text: c.byStore.slice(0, 3).map(x => `${x.s} ${money(x.total)}`).join(" · ") })),
+    h("span", { class: "chev", text: "›" }));
+}
+function openCompare() {
+  const s = openSheet("🏷️ Compare stores");
+  const draw = () => {
+    if (s.closed) return;
+    s.body.textContent = "";
+    const c = listCompare(S.listItems.map(listView));
+    if (!c.count) { put(s.body, h("div", { class: "empty small" }, h("b", { text: "Nothing left to buy" }), "Items you've checked off aren't compared.")); return; }
+    const save = c.now - c.mix;
+    put(s.body,
+      h("p", { class: "lmeta", text: `Your ${c.count} item${c.count === 1 ? "" : "s"} still to buy, from prices you've saved, read off tags or receipts in the last ${PRICE_DAYS} days. Where a store has no price for something, your list price is used.` }),
+      h("h3", { class: "rh", text: "All at one store" }),
+      h("div", { class: "gcard" }, c.byStore.map((x, i) => {
+        const canMove = c.rows.filter(r => r.at.has(x.s) && (r.it.store || "Other") !== x.s);
+        return h("div", { class: "cmprow" + (i === 0 ? " best" : "") },
+          h("div", { style: "flex:1;min-width:0" }, h("b", { text: `${i === 0 ? "🏆 " : ""}${x.s}` }),
+            h("div", { class: "lmeta", text: `${x.priced} of ${c.count} priced there` + (x.missing ? ` · ${x.missing} at list price` : "") })),
+          h("b", { class: "cmpmoney", text: money(x.total) }),
+          canMove.length ? h("button", { class: "btn", type: "button", text: "Move here",
+            onclick: () => moveItems(canMove.map(r => ({ it: r.it, s: x.s, p: r.at.get(x.s).p })), `Moved ${canMove.length} item${canMove.length === 1 ? "" : "s"} to ${x.s}`) }) : null);
+      })),
+      h("h3", { class: "rh", text: "Cheapest mix" }),
+      h("div", { class: "gcard", style: "padding:10px 12px" },
+        h("div", { class: "cmprow", style: "border:0;padding:0" }, h("div", { style: "flex:1" }, h("b", { text: "Your list now" })), h("b", { class: "cmpmoney", text: money(c.now) })),
+        h("div", { class: "cmprow", style: "border:0;padding:4px 0 0" }, h("div", { style: "flex:1" }, h("b", { text: "Each item at its cheapest store" })), h("b", { class: "cmpmoney", text: money(c.mix) })),
+        save >= 0.01 ? h("button", { class: "btn green block", type: "button", style: "margin-top:10px", text: `Switch ${c.moves.length} item${c.moves.length === 1 ? "" : "s"} · save ${money(save)}`,
+          onclick: () => moveItems(c.moves.map(r => ({ it: r.it, s: r.best.s, p: r.best.p })), `Switched ${c.moves.length} item${c.moves.length === 1 ? "" : "s"}, saving about ${money(save)}`) })
+          : h("p", { class: "lmeta", text: "Every item is already at its cheapest known store." })),
+      c.moves.length ? [h("h3", { class: "rh", text: "Cheaper somewhere else" }),
+        h("div", { class: "gcard" }, c.moves.sort((a, b) => (b.mine - b.best.p) * b.n - (a.mine - a.best.p) * a.n).map(r => h("div", { class: "cmprow" },
+          h("div", { style: "flex:1;min-width:0" }, h("b", { text: r.it.name }),
+            h("div", { class: "lmeta", text: `${money(r.mine)} at ${r.it.store} → ${money(r.best.p)} at ${r.best.s}${isPerLb(r.it) ? " (per lb)" : ""}` })),
+          h("button", { class: "btn", type: "button", text: `Move · ${money((r.mine - r.best.p) * r.n)}`,
+            onclick: () => moveItems([{ it: r.it, s: r.best.s, p: r.best.p }], `${r.it.name} moved to ${r.best.s}`) }))))] : null);
+  };
+  compareSheet = draw;
+  s.onclose = () => { compareSheet = null; };
+  draw();
+}
+let compareSheet = null;
+
+// 🛒 Shopping mode: one store, aisle by aisle, big checkboxes, and the screen stays on.
+let shopMode = null;
+function openShopMode(store) {
+  const s = openSheet(`🛒 ${store}`);
+  const sheet = s.body.closest(".sheet"); if (sheet) sheet.classList.add("shopsheet");
+  let wake = null;
+  const keepOn = async () => { try { if ("wakeLock" in navigator && document.visibilityState === "visible") wake = await navigator.wakeLock.request("screen"); } catch (e) {} };
+  const vis = () => { if (shopMode) keepOn(); };
+  document.addEventListener("visibilitychange", vis);
+  keepOn();
+  const draw = () => {
+    if (s.closed) return;
+    s.body.textContent = "";
+    const all = S.listItems.map(listView).filter(i => (i.store || "Other") === store);
+    const left = all.filter(i => !i.inCart).sort(byAisle), done = all.filter(i => i.inCart);
+    const parts = [];
+    let last = null;
+    left.forEach(i => { const a = aisleLabel(i.aisle) || "No aisle"; if (a !== last) { parts.push(h("div", { class: "shopaisle", text: "🪧 " + a })); last = a; } parts.push(listRow(i)); });
+    put(s.body,
+      h("div", { class: "shoptop" }, h("b", { text: `${done.length} of ${all.length} in the cart` }), h("span", { text: `${money(sum(done, lineTotal))} of ≈ ${money(sum(all, lineTotal))}` })),
+      left.length ? h("div", { class: "gcard" }, parts) : h("div", { class: "empty small" }, h("b", { text: "All done here 🎉" }), all.length ? "Everything for this store is in the cart." : "Nothing on the list for this store."),
+      done.length ? h("details", { style: "margin-top:12px" }, h("summary", { class: "lmeta", text: `In the cart (${done.length})` }), h("div", { class: "gcard" }, done.map(listRow))) : null,
+      h("button", { class: "btn primary block", type: "button", style: "margin-top:14px", text: "Done shopping", onclick: () => s.close() }));
+  };
+  shopMode = { store, draw };
+  s.onclose = () => { shopMode = null; document.removeEventListener("visibilitychange", vis); try { wake && wake.release(); } catch (e) {} };
+  draw();
 }
 const ago = d => { if (!d) return ""; const n = Math.round((Date.now() - d) / 864e5); return n <= 0 ? "today" : n === 1 ? "yesterday" : n < 14 ? `${n} days ago` : new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric" }); };
 // A tiny line of one store's prices over time. One series, so no legend; the numbers are listed beside it.
