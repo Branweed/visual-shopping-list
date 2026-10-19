@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=48";
-import { MEAL_VERSIONS } from "./meal-versions.js?v=48";
-import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=48";
-import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=48";
+import { MORE_MEALS } from "./meals-more.js?v=49";
+import { MEAL_VERSIONS } from "./meal-versions.js?v=49";
+import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=49";
+import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=49";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -209,7 +209,7 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-48";
+const APP_VERSION = "2026.10.18-49";
 const RULES_VERSION = "v15";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -564,7 +564,9 @@ async function route() {
     const hids = Object.keys(S.userDoc.households || {});
     const hid = S.userDoc.activeHousehold && hids.includes(S.userDoc.activeHousehold) ? S.userDoc.activeHousehold : hids[0];
     if (hid) return enterHousehold(hid);
-    return showSetup();
+    // Brand-new account: give them their own household right away. They can still join someone's from the Family tab.
+    try { gateLoading("Setting up your lists…"); return await createHousehold(`${myName().split(" ")[0] || "My"}'s Household`, false); }
+    catch (e) { console.error(e); return showSetup(); }
   } finally { routing = false; }
 }
 
@@ -1107,9 +1109,16 @@ function renderFamily() {
         : (owner && m.id !== uid() ? h("button", { class: "btn small danger", text: "Remove", onclick: () => removeMember(m) }) : null))),
     owner
       ? h("div", { class: "actions", style: "margin-top:12px" },
-          h("button", { class: "btn primary", text: "＋ Invite someone", onclick: createInvite }),
+          h("button", { class: "btn primary", text: "＋ Invite to this household", onclick: createInvite }),
           h("button", { class: "btn", text: "Reset links", onclick: () => revokeInvites(true) }))
-      : h("p", { class: "note", text: "Only the owner can invite or remove people." })));
+      : h("p", { class: "note", text: "Only the owner can invite or remove people." }),
+    h("p", { class: "note", text: "Invited people share your lists, pantry and meal plan." })));
+
+  // A friend who should have their own lists: send them the app itself, not an invite.
+  host.append(card(h("h2", { text: "Share the app" }),
+    h("p", { class: "lmeta", text: "Send a friend the app so they get their own account and their own private lists. They won't see your lists, pantry or meals." }),
+    h("div", { class: "actions", style: "margin-top:10px" },
+      h("button", { class: "btn primary", text: "📤 Share the app", onclick: shareApp }))));
 
   const hh = Object.entries(S.userDoc.households || {});
   host.append(card(h("h2", { text: "Your households" }),
@@ -1253,6 +1262,13 @@ async function renameHousehold() {
   } catch (e) { fail(e); }
 }
 
+async function shareApp() {
+  const link = location.origin + location.pathname;
+  const text = "Try this shopping list app. Sign in with Google and you get your own lists:";
+  if (navigator.share) { try { await navigator.share({ title: "Visual Shopping List", text, url: link }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+  try { await navigator.clipboard.writeText(`${text} ${link}`); toast("Link copied. Paste it in a message."); }
+  catch (e) { await choose("Share the app", link, [{ label: "OK", value: 1 }]); }
+}
 async function createInvite() {
   const code = randCode(22);
   const p = progressSheet("Making an invite link");
