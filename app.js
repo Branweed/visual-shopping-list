@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=59";
-import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=59";
-import { MEAL_VERSIONS } from "./meal-versions.js?v=59";
-import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=59";
-import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=59";
+import { MORE_MEALS } from "./meals-more.js?v=60";
+import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=60";
+import { MEAL_VERSIONS } from "./meal-versions.js?v=60";
+import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=60";
+import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=60";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -211,7 +211,13 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.20-59";
+const THEME_KEY = "vsl:theme";   // device-wide, read early by fit.js
+const themeNow = () => { try { const t = localStorage.getItem(THEME_KEY); return t === "dark" || t === "light" ? t : "auto"; } catch (e) { return "auto"; } };
+function setTheme(t) {
+  try { t === "auto" ? localStorage.removeItem(THEME_KEY) : localStorage.setItem(THEME_KEY, t); } catch (e) {}
+  if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", t);
+}
+const APP_VERSION = "2026.10.20-60";
 const RULES_VERSION = "v18";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -1134,6 +1140,14 @@ function renderFamily() {
     h("div", { class: "actions", style: "margin-top:10px" },
       h("button", { class: "btn primary", text: "📤 Share the app", onclick: shareApp }))));
 
+  // 🌙 Light or dark, per phone. fit.js applies it before the page draws so there's no white flash.
+  const theme = themeNow();
+  host.append(card(h("h2", { text: "🌙 Appearance" }),
+    h("div", { class: "seg", role: "group", "aria-label": "Appearance", style: "margin:8px 0 4px" },
+      [["auto", "📱 Match phone"], ["light", "☀️ Light"], ["dark", "🌙 Dark"]].map(([k, label]) =>
+        h("button", { type: "button", class: "segb" + (theme === k ? " on" : ""), "aria-pressed": String(theme === k), text: label, onclick: () => { setTheme(k); renderFamily(); } }))),
+    h("p", { class: "lmeta", text: "Saved on this phone only." })));
+
   const hh = Object.entries(S.userDoc.households || {});
   host.append(card(h("h2", { text: "Your households" }),
     hh.map(([id, name]) => h("button", { class: "srow" + (id === S.hid ? " cur" : ""), onclick: () => { if (id !== S.hid) switchHousehold(id); } },
@@ -1483,11 +1497,15 @@ function renderList() {
   if (!items.length) {
     const ub = usualBar();
     if (ub) host.append(ub);
-    host.append(h("div", { class: "empty" }, h("b", { text: "Your list is empty" }),
-      "Type an item above, pick from your stores, or scan a handwritten list.",
+    const fresh = !S.inventory.length;
+    host.append(h("div", { class: "empty" }, emptyArt(fresh ? "🛒" : "✨"),
+      h("b", { text: fresh ? "Let's make your first list" : "All clear, nothing to buy" }),
+      fresh ? "Type something above, tap 🎤 and say it, or snap a photo of a handwritten list. Everyone in your household sees it right away."
+        : "Add things as you run out. Type above, tap 🎤 and say a few items, or scan a handwritten note.",
       h("div", { class: "actions emptyscan" },
-        h("button", { class: "btn", text: "Browse stores", onclick: () => setTab("stores") }),
-        h("button", { class: "btn violet", text: "Scan a list", onclick: scanList }))));
+        h("button", { class: "btn", type: "button", text: "🎤 Say it", onclick: voiceAdd }),
+        h("button", { class: "btn violet", type: "button", text: "📸 Scan a list", onclick: scanList })),
+      fresh ? null : h("button", { class: "link", type: "button", style: "margin-top:10px", text: "Browse your stores →", onclick: () => setTab("stores") })));
     return;
   }
   const checked = items.filter(i => i.inCart);
@@ -1730,6 +1748,126 @@ $("#quickForm").addEventListener("submit", e => {
   inp.value = "";
 });
 
+/* ---------- 🎤 Voice add: say the list, check it on the usual review screen ---------- */
+// Chrome turns speech into text for free. Each pause, "and", or comma starts a new item, and names the app
+// already knows (saved items, pantry, recipe ingredients) split a run-on "milk eggs bread" into three.
+const NUM_WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, couple: 2 };
+const VOICE_UNIT = /^(pounds?|lbs?|ounces?|oz|bags?|box|boxes|cans?|packs?|packages?|bottles?|jars?|gallons?|half|quarts?|loaf|loaves|bunch|bunches|heads?|cartons?|containers?|rolls?|dozen|pieces?|cases?|tubs?)$/;
+const VOICE_FILLER = /^(um+|uh+|okay|ok|so|i need|we need|we're out of|were out of|i want|get|grab|add|pick up|buy|some|more|also|please|the|of)\b\s*/;
+const sing = w => w.length > 3 && /s$/.test(w) && !/ss$/.test(w) ? w.replace(/ies$/, "y").replace(/(ch|sh|x|o)es$/, "$1").replace(/s$/, "") : w;
+let voiceVocab = null;
+function voiceWords() {
+  if (voiceVocab && voiceVocab.src === S.inventory && voiceVocab.p === S.pantry) return voiceVocab.set;
+  const set = new Set(), add = n => { const k = norm(n).replace(/[^a-z' ]+/g, " ").replace(/\s+/g, " ").trim(); if (k && k.split(" ").length <= 4) set.add(k.split(" ").map(sing).join(" ")); };
+  (S.inventory || []).forEach(i => add(i.name));
+  (S.pantry || []).forEach(p => { add(p.name); add(foodName(p.name)); });
+  (S.listItems || []).forEach(i => add(i.name));
+  S.usual && S.usual.forEach(u => add(u.n));
+  QUICK_MEALS.forEach(m => (m.ingredients || []).forEach(i => add(Array.isArray(i) ? i[0] : typeof i === "string" ? i : i.item)));
+  Object.values(SHORTHAND).forEach(add);
+  voiceVocab = { src: S.inventory, p: S.pantry, set };
+  return set;
+}
+// "two pounds of chicken and milk eggs bread" → ["2 chicken", "milk", "eggs", "bread"]
+function voiceLines(said) {
+  const vocab = voiceWords(), out = [];
+  const chunks = norm(said).replace(/[&+]/g, ",").replace(/\b(and then|and|then|plus|also|oh and)\b/g, ",").split(/[,.;!?\n]+/);
+  for (let c of chunks) {
+    let prev;
+    do { prev = c; c = c.trim().replace(VOICE_FILLER, ""); } while (c !== prev);
+    const w = c.replace(/[^a-z0-9' ]+/g, " ").split(/\s+/).filter(Boolean);
+    let qty = 1, buf = [], bufQty = 1;
+    const flush = () => { if (buf.length) out.push((bufQty > 1 ? bufQty + " " : "") + buf.join(" ")); buf = []; bufQty = 1; };
+    for (let i = 0; i < w.length; i++) {
+      const t = w[i];
+      const n = /^\d{1,2}$/.test(t) ? +t : NUM_WORDS[t];
+      if (n && i + 1 < w.length && !(t === "a" && buf.length)) {   // a number starts a new item: "2 milk", "a dozen eggs"
+        flush(); qty = n;
+        while (i + 1 < w.length && (VOICE_UNIT.test(w[i + 1]) || w[i + 1] === "of")) i++;
+        continue;
+      }
+      let hit = 0;
+      for (let k = Math.min(4, w.length - i); k >= 1 && !hit; k--) if (vocab.has(w.slice(i, i + k).map(sing).join(" "))) hit = k;
+      if (hit && !(buf.length && hit === 1 && !vocab.has(buf.map(sing).join(" ")))) {   // "ground beef": keep unknown words with what follows
+        flush(); out.push((qty > 1 ? qty + " " : "") + w.slice(i, i + hit).join(" ")); qty = 1; i += hit - 1;
+      } else { if (!buf.length) bufQty = qty; qty = 1; buf.push(t); }
+    }
+    flush();
+  }
+  const seen = new Map();   // said twice → once, keeping the bigger number
+  out.filter(l => /[a-z]{2}/.test(l)).forEach(l => {
+    const m = l.match(/^(\d+) (.+)$/), q = m ? +m[1] : 1, n = m ? m[2] : l, k = n.split(" ").map(sing).join(" ");
+    const was = seen.get(k);
+    if (!was || q > was.q) seen.set(k, { q, n });
+  });
+  return [...seen.values()].map(x => (x.q > 1 ? x.q + " " : "") + x.n);
+}
+let voiceRec = null;
+// A big friendly picture for blank screens.
+const emptyArt = e => h("span", { class: "ee", "aria-hidden": "true", text: e });
+function voiceAdd() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { const i = $("#quickInput"); i.focus(); toast("Tap the 🎤 on your keyboard to talk"); return; }
+  const s = openSheet("🎤 Say your list");
+  const heard = [];   // one entry per pause
+  let live = "", stopped = false, quiet = 0;
+  const said = h("div", { class: "voicesaid", "aria-live": "polite" });
+  const status = h("div", { class: "voicestatus" }, h("span", { class: "vdot", "aria-hidden": "true" }), h("span", { text: "Listening…" }));
+  const draw = () => {
+    said.textContent = "";
+    const lines = voiceLines(heard.join(", "));
+    if (!lines.length && !live) said.append(h("p", { class: "lmeta", text: "Try: “milk, a dozen eggs, two pounds of chicken and bananas”" }));
+    lines.forEach(l => { const m = l.match(/^(\d+) (.+)$/), n = m ? m[2] : l;
+      said.append(h("span", { class: "vchip", text: n.charAt(0).toUpperCase() + n.slice(1) + (m ? ` ×${m[1]}` : "") })); });
+    again.disabled = !stopped;
+    if (live) said.append(h("span", { class: "vchip live", text: live }));
+    done.disabled = !lines.length;
+    done.textContent = lines.length ? `Check ${lines.length} item${lines.length === 1 ? "" : "s"}` : "Check items";
+  };
+  const finish = () => {
+    stopped = true;
+    try { voiceRec && voiceRec.abort(); } catch (e) {}
+    const lines = voiceLines(heard.join(", ") + (live ? ", " + live : ""));
+    s.close();
+    if (lines.length) quickPaste(lines.join("\n"), "voice");
+  };
+  const done = h("button", { class: "btn primary", type: "button", text: "Check items", disabled: true, onclick: finish });
+  const start = () => {
+    if (stopped || s.closed) return;
+    const r = new SR();
+    voiceRec = r;
+    r.lang = navigator.language || "en-US";
+    r.interimResults = true;
+    r.continuous = false;   // Android repeats words in continuous mode, so restart after each pause instead
+    r.maxAlternatives = 1;
+    r.onresult = e => {
+      let fin = "", mid = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) (e.results[i].isFinal ? (fin += e.results[i][0].transcript) : (mid += e.results[i][0].transcript));
+      if (fin.trim()) { heard.push(fin.trim()); live = ""; quiet = 0; } else live = mid.trim();
+      draw();
+    };
+    r.onerror = e => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") { stopped = true; status.lastChild.textContent = "Microphone is blocked. Allow it for this site in Chrome's settings."; status.classList.add("off"); draw(); }
+      else if (e.error === "network") { stopped = true; status.lastChild.textContent = "Voice needs the internet. Type your items instead."; status.classList.add("off"); draw(); }
+      else if (e.error === "no-speech") quiet++;
+    };
+    r.onend = () => {
+      if (live) { heard.push(live); live = ""; draw(); }
+      if (stopped || s.closed) return;
+      if (quiet >= 2) { stopped = true; status.lastChild.textContent = heard.length ? "Paused. Tap the mic to say more." : "Didn't hear anything. Tap the mic to try again."; status.classList.add("off"); draw(); return; }
+      start();
+    };
+    try { r.start(); status.classList.remove("off"); status.lastChild.textContent = "Listening… pause between items"; } catch (e) { setTimeout(start, 300); }
+  };
+  const again = h("button", { class: "btn", type: "button", "aria-label": "Listen again", text: "🎤 Say more", onclick: () => { if (!stopped) return; stopped = false; quiet = 0; draw(); start(); } });
+  put(s.body, status, said,
+    h("div", { class: "actions", style: "margin-top:14px" }, again, done),
+    h("p", { class: "note", text: "Chrome turns your voice into text with Google's free speech service. Nothing is saved until you add the items." }));
+  s.onclose = () => { stopped = true; try { voiceRec && voiceRec.abort(); } catch (e) {} voiceRec = null; };
+  draw(); start();
+}
+$("#voiceBtn").addEventListener("click", voiceAdd);
+
 /* =====================================================================
    ADD ITEMS (stores) TAB
    ===================================================================== */
@@ -1754,8 +1892,8 @@ function renderStores() {
     }
     const names = storeNames();
     if (!names.length) {
-      host.append(h("div", { class: "empty" }, h("b", { text: "Add your first store" }),
-        "Then save the things you buy there, with a photo, aisle and price.", h("br"),
+      host.append(h("div", { class: "empty" }, emptyArt("🏬"), h("b", { text: "Add your first store" }),
+        "Walmart, Market Basket, the corner store… Then save what you buy there with a photo, aisle and price, so adding it next time is one tap.", h("br"),
         h("button", { class: "btn primary", text: "➕ Add a store", onclick: addStore })));
       return;
     }
@@ -1788,8 +1926,8 @@ function renderStores() {
     text: label, onclick: () => { lsSet("itemSort", mode); renderStores(); } });
   if (items.length > 1) host.append(h("div", { class: "seg", role: "group", "aria-label": "Sort items" }, seg("az", "A–Z"), seg("aisle", "By aisle")));
   if (!items.length) {
-    host.append(h("div", { class: "empty" }, h("b", { text: q ? "No matches" : `No items saved for ${S.store} yet` }),
-      "Add one with a photo, aisle and price.", h("br"),
+    host.append(h("div", { class: "empty" }, q ? null : emptyArt("🏷️"), h("b", { text: q ? "No matches" : `No items saved for ${S.store} yet` }),
+      q ? "Try another word, or save it as a new item." : "Save the things you buy here with a photo, aisle and price. Scanning a receipt from this store adds prices too.", h("br"),
       h("button", { class: "btn primary", text: "＋ Add item", onclick: () => openNewItem(S.store, q ? S.invQuery : "") })));
     return;
   }
@@ -2239,7 +2377,7 @@ function renderCalendar() {
         const { id, ...data } = ev;
         deleteDoc(hdoc("events", id)).catch(fail);
         toast("Event deleted", { label: "Undo", fn: () => setDoc(hdoc("events", id), { ...data, createdBy: uid() }).catch(fail) });
-      } }))) : h("div", { class: "lmeta", text: "Nothing planned." }),
+      } }))) : h("div", { class: "lmeta", text: "Nothing planned. Tap 🗓️ Plan the week on Meals, or add a meal to any day." }),
     h("button", { class: "btn block", style: "margin-top:10px", text: "＋ Add to this day", onclick: async () => {
       const title = await promptSheet("Add to " + label, "What's planned?", "", "Add", { max: 140 });
       if (title) addDoc(hcol("events"), { title, date: S.calDay, createdAt: Date.now(), createdBy: uid() }).catch(fail);
@@ -4514,6 +4652,7 @@ function renderCook() {
   });
   host.append(...[
     plannedCard(),
+    useItUpCard(),
     h("div", { class: "card qmeals" },
       h("div", { class: "ghead" }, h("h2", { text: "Meals" }),
         h("button", { class: "btn primary", type: "button", text: "🗓️ Plan the week", onclick: planMeals })),
@@ -5408,6 +5547,57 @@ function mealTile(m0, prefer = []) {
     h("span", { class: "qe", text: m.e || "★" }),
     h("span", { class: "qn", text: (m.savedQuick ? "★ " : "") + m.name }),
     h("span", { class: "qs" + (n ? "" : " ok"), text: n ? `Need ${n}` : "✓ Ready" }));
+}
+/* ---------- 🥫 Use it up: meals ranked by how much of the pantry they use, use-soon food first ---------- */
+// All on the phone from the built-in and saved recipes, so it's instant, free and never needs the AI.
+const ingName = i => Array.isArray(i) ? i[0] : typeof i === "string" ? i : i && i.item;
+let uiuMemo = { v: [] };
+function useItUp() {   // recomputed only when the pantry, recipes, list or typed ingredients change
+  const key = C.ings.join("|");
+  if (uiuMemo.src === S.pantry && uiuMemo.rec === S.recipes && uiuMemo.li === S.listItems && uiuMemo.key === key) return uiuMemo.v;
+  const soon = new Set(useSoon().map(p => p.id));
+  let v = [];
+  if (pantryFoods().length >= 3) v = allMeals().map(m => {
+    const uses = [], soonUsed = [];
+    let need = 0;
+    (m.ingredients || []).forEach(i => {
+      const n = ingName(i);
+      if (!n || STAPLES.has(norm(n))) return;
+      const p = pantryMatch(n);
+      if (p && p.level !== "out") { if (!uses.includes(p.name)) uses.push(p.name); if (soon.has(p.id) && !soonUsed.includes(p.name)) soonUsed.push(p.name); }
+      else if (ingStatus(n) === "need") need++;
+    });
+    // Mostly "how much of this do I already have", then a boost for each use-soon food it saves.
+    const cover = uses.length / (uses.length + need);
+    return { m, uses, soon: soonUsed, need, score: cover * 4 + soonUsed.length * 2 + uses.length * 0.3 };
+  }).filter(x => x.uses.length >= 2 && x.need <= 5).sort((a, b) => b.score - a.score || a.need - b.need || a.m.name.localeCompare(b.m.name)).slice(0, 40);
+  uiuMemo = { src: S.pantry, rec: S.recipes, li: S.listItems, key, v };
+  return v;
+}
+function uiuTile(x) {
+  return h("button", { type: "button", class: "qtile uiutile", "aria-label": `${x.m.name}: uses ${x.uses.length} things you have${x.need ? `, need ${x.need}` : ", ready to cook"}`, onclick: () => openMeal(x.m) },
+    h("span", { class: "qe", text: x.m.e || "★" }),
+    h("span", { class: "qn", text: x.m.name }),
+    x.soon.length ? h("span", { class: "uiusoon", text: "⏰ " + foodName(x.soon[0]) }) : h("span", { class: "uiuuses", text: `Uses ${x.uses.length} you have` }),
+    h("span", { class: "qs" + (x.need ? "" : " ok"), text: x.need ? `Need ${x.need}` : "✓ Ready" }));
+}
+function useItUpCard() {
+  const ranked = useItUp();
+  if (!ranked.length) return null;
+  const soonNames = useSoon().map(p => foodName(p.name)).filter(Boolean);
+  return h("div", { class: "card uiucard" },
+    h("div", { class: "ghead" }, h("h2", { text: "🥫 Use it up" }),
+      ranked.length > 6 ? h("button", { class: "link", type: "button", text: `See all ${ranked.length}`, onclick: openUseItUp }) : null),
+    h("p", { class: "lmeta", style: "margin:2px 2px 0", text: soonNames.length ? `Meals that use what you have, starting with ${soonNames.slice(0, 3).join(", ")} (use soon).` : "Meals that use the most of what's in your pantry." }),
+    h("div", { class: "grow" }, ranked.slice(0, 10).map(uiuTile)));
+}
+function openUseItUp() {
+  const s = openSheet("🥫 Use it up");
+  const ranked = useItUp();
+  put(s.body,
+    h("p", { class: "lmeta", style: "margin-top:0", text: "Built-in and saved recipes, ranked by how much of your pantry they use. Use-soon food counts most. Salt, oil and other basics aren't counted." }),
+    ranked.length ? h("div", { class: "qgrid" }, ranked.map(uiuTile))
+      : h("div", { class: "empty small" }, h("b", { text: "Nothing matches yet" }), "Add a few more things to the pantry and meals that use them show up here."));
 }
 // A category sheet. Chips along the top narrow it further — Chicken + ⚡ 30 min + Mexican — and they stack.
 function openGroup(k) {
@@ -6334,12 +6524,13 @@ function renderPantry() {
         checked ? `🧺 Put away groceries (${checked})` : "🧺 Put away groceries"),
       h("button", { class: "btn", type: "button", text: "🏷️ Scan", onclick: pantryScan })),
     !checked && !all.length ? null : !checked ? h("p", { class: "lmeta", style: "margin:4px 2px 0", text: "After shopping, items you checked off on the list can go straight in here." }) : null,
-    all.length ? null : h("div", { class: "empty" }, h("b", { text: "Nothing in the pantry yet" }),
-      "Add what's in your fridge, freezer and cupboards. Meals then know what you have, and it stays off your shopping list.",
+    all.length ? null : h("div", { class: "empty" }, emptyArt("🥫"), h("b", { text: "Nothing in the pantry yet" }),
+      "Add what's in your fridge, freezer and cupboards. Then Meals shows what you can cook with it, you get a nudge before food goes bad, and the list warns you before you buy something you already have.",
       h("p", { class: "lmeta", text: "Fastest way: check things off on your list while you shop, then tap “Put away groceries”." })),
     soon.length ? h("div", { class: "card pcard" }, h("h2", { text: "⏰ Use soon" }),
       h("div", { class: "gcard" }, soon.map(row)),
       h("button", { class: "btn block", type: "button", style: "margin-top:10px", text: "🍳 Meal ideas with these", onclick: () => { C.ideas = null; setTab("create"); toast("Use-soon items go first in “Ideas from what you have”"); } })) : null,
+    useItUpCard(),
     short.length ? h("div", { class: "card pcard" }, h("div", { class: "ghead" }, h("h2", { text: "🛒 Running low or out" }),
         h("button", { class: "btn small", type: "button", text: "Add all to list", onclick: () => short.forEach(p => addNameToList(p.name)) })),
       h("div", { class: "gcard" }, short.map(row))) : null,
@@ -6951,7 +7142,8 @@ async function openSpending() {
           h("div", { class: "sc", text: new Date(t.d).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) +
             (t.est > 0 ? ` · list ${money(t.est)} → spent ${money(t.total)} (${t.total >= t.est ? "+" : "−"}${money(Math.abs(t.total - t.est))})` : "") })),
         h("b", { class: "cmpmoney", text: money(t.total) }))))
-        : h("div", { class: "empty small" }, h("b", { text: "No trips this month" }), "Scan a receipt (＋ → 🧾 Receipt prices) and its total is saved here."),
+        : h("div", { class: "empty small" }, emptyArt("🧾"), h("b", { text: trips.length ? "No trips this month yet" : "Your trips show up here" }),
+            "After shopping, tap 🧾 Scan a receipt below (or add the total by hand). You'll see what each store costs you, month by month."),
       h("div", { class: "actions", style: "margin-top:14px" },
         h("button", { class: "btn", type: "button", text: "🧾 Scan a receipt", onclick: () => { s.close(); receiptFlow(); } }),
         h("button", { class: "btn", type: "button", text: "＋ Add a trip", onclick: () => editTrip(null) })),
@@ -7092,7 +7284,9 @@ function openUsual() {
           h("button", { class: "btn", type: "button", text: "Not now", onclick: () => { snoozeUsual(x); draw(); renderList(); } }),
           h("button", { class: "btn green", type: "button", text: "＋ Add", onclick: () => addUsual(x) })))),
         due.length > 1 ? h("button", { class: "btn green block", type: "button", style: "margin-top:10px", text: `Add all ${due.length}`, onclick: () => due.forEach(addUsual) }) : null]
-        : h("div", { class: "empty small" }, h("b", { text: "Nothing due right now" }), "When something you buy regularly is due again, it shows up here."),
+        : h("div", { class: "empty small" }, emptyArt(all.length ? "✅" : "🔁"), h("b", { text: all.length ? "Nothing due right now" : "Still learning your habits" }),
+            all.length ? "When something you buy regularly is due again, it shows up here and on your list."
+              : "Check items off as you shop. Once you've bought something 3 times, the app learns how often you need it and reminds you when it's due."),
       all.length ? h("details", { style: "margin-top:14px" }, h("summary", { class: "lmeta", text: `How often you buy things (${all.length})` }),
         h("div", { class: "gcard" }, all.slice(0, 80).map(x => h("div", { class: "cmprow" },
           h("div", { style: "flex:1;min-width:0" }, h("b", { text: x.u.n }), h("div", { class: "lmeta", text: `${everyText(x.r.every)} · ${x.r.times} times · last ${ago(x.r.last)}` }))))))
