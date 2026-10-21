@@ -10,7 +10,11 @@ Read this file first in every new chat. Start one by saying **"continue Pickup B
 
 ## Current state
 - **App v58** (`APP_VERSION "2026.10.18-58"`). **Rules v18** (`RULES_VERSION "v18"`, see RULES-v18.md).
-- ⏳ **Waiting on Brandon:** publish rules v18 if he hasn't yet, then test v57–v58 on his phone. Until v18 is published, trips, usual items and shared receipt matches won't save. The rest of the app still works.
+- ⏳ **Waiting on Brandon:** rules v18 is NOT published. Checked the console Oct 20: the live rules are v17 (376 lines, ~18k chars, last published Oct 18 10:59 PM) with no trips/usual/aliases blocks. Until v18 is published, trips, usual items and shared receipt matches won't save. Then test v57–v58 on his phone.
+- **Next up (Brandon asked Claude to do it all without intervention):**
+  1. Save the complete live rules as `firestore.rules` in the repo with v18 merged, so future updates are one select-all paste. Claude can read them in Brandon's Chrome (console → Firestore → Rules tab; the editor is CodeMirror, and `.CodeMirror.CodeMirror.getValue()` works). Returning the full text from the page gets blocked as "query string data", so read it with get_page_text while scrolling, or ask Brandon to paste it. Claude must not publish rules itself; Brandon pastes and publishes.
+  2. Then build one batch, test it, and push it: a design polish pass (screenshot every sheet and unify spacing, type and buttons), a trip-done polaroid card when finishing Shop mode, Shop mode learning check-off order per store and sorting by it, and manifest home-screen shortcuts (Add item, Shop mode, Scan receipt).
+- **Other ideas Brandon has seen:** voice add, a monthly budget on Spending, "use it up" pantry meals, stock-up alerts, dark mode, friendlier empty states.
 - **v57:**
   - Receipts read the total and date and save a trip (`households/{hid}/trips`).
   - 💵 Spending (in the list's ⋯ menu and the Stores header) shows 6 months of bars, totals by store, a trip list, add/edit/delete, and estimated vs. spent.
