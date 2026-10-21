@@ -6,12 +6,12 @@ Read this file first in every new chat. Start one by saying **"continue Pickup B
 - Firebase PWA grocery, pantry and meals app, for Brandon (Google Pixel, Android Chrome). Act as a senior developer and a master cook.
 - Repo: Branweed/visual-shopping-list. GitHub Pages deploys from `main`. The code is plain HTML plus ES-module JS with no build step.
 - Firebase project `my-test-list01` (Web SDK 12.18.0): Auth (Google + email), Firestore, App Check, Firebase AI Logic → Gemini free tier.
-- **Rules live in Firebase, not this repo.** Each rules change gets a `RULES-vN.md` with the exact block to paste. Brandon publishes it, then runs Family tab → Run security check.
+- **Rules:** the full rules are in `firestore.rules` (exact copy of what should be live). To change rules: edit `firestore.rules`, bump the `_rules` marker and `RULES_VERSION`, add a line to the security check, write a short `RULES-vN.md`. Brandon copies the whole file into Firebase → Rules, publishes, then runs Family tab → Run security check. Claude never publishes.
 
 ## Current state
 - **App v59** (`APP_VERSION "2026.10.20-59"`). **Rules v18** (`RULES_VERSION "v18"`, see RULES-v18.md). v59 needed no rules change.
-- ⏳ **Waiting on Brandon:** rules v18 is NOT published (live console was v17 on Oct 20). Until it is, trips, usual items and shared receipt matches won't save. Then test v57–v59 on his phone.
-- **Next up:** save the complete live rules as `firestore.rules` with v18 merged, so future updates are one select-all paste. Read them in the browser (console → Firestore → Rules; the editor is CodeMirror) or ask Brandon to paste them. Claude never publishes rules itself.
+- ⏳ **Waiting on Brandon:** publish `firestore.rules` (select-all paste, see RULES-v18.md). Live rules on Oct 20 were the Oct 18 10:59 PM version: the `_rules` marker already says v18 but the trips/usual/aliases blocks are missing, so trips, usual items and shared receipt matches won't save. Then test v57–v59 on his phone and report anything broken.
+- **Next up:** fix whatever Brandon finds testing v57–v59. Then pick from the ideas below.
 - **Ideas Brandon has seen, not built:** voice add, monthly budget on Spending, "use it up" pantry meals, stock-up alerts, dark mode, friendlier empty states, Play Store listing.
 - **v59:**
   - 🧭 Shop mode learns your path per store (`loadPath`/`learnPath`/`pathGroups`, localStorage `path:<store>`, per device, no Firestore). Needs 3+ check-offs in a trip. A bar toggles "my path" / "aisle order".
