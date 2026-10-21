@@ -9,21 +9,16 @@ Read this file first in every new chat. Start one by saying **"continue Pickup B
 - **Rules live in Firebase, not this repo.** Each rules change gets a `RULES-vN.md` with the exact block to paste. Brandon publishes it, then runs Family tab → Run security check.
 
 ## Current state
-- **App v58** (`APP_VERSION "2026.10.18-58"`). **Rules v18** (`RULES_VERSION "v18"`, see RULES-v18.md).
-- ⏳ **Waiting on Brandon:** rules v18 is NOT published. Checked the console Oct 20: the live rules are v17 (376 lines, ~18k chars, last published Oct 18 10:59 PM) with no trips/usual/aliases blocks. Until v18 is published, trips, usual items and shared receipt matches won't save. Then test v57–v58 on his phone.
-- **Next up (Brandon asked Claude to do it all without intervention):**
-  1. Save the complete live rules as `firestore.rules` in the repo with v18 merged, so future updates are one select-all paste. Claude can read them in Brandon's Chrome (console → Firestore → Rules tab; the editor is CodeMirror, and `.CodeMirror.CodeMirror.getValue()` works). Returning the full text from the page gets blocked as "query string data", so read it with get_page_text while scrolling, or ask Brandon to paste it. Claude must not publish rules itself; Brandon pastes and publishes.
-  2. Then build one batch, test it, and push it: a design polish pass (screenshot every sheet and unify spacing, type and buttons), a trip-done polaroid card when finishing Shop mode, Shop mode learning check-off order per store and sorting by it, and manifest home-screen shortcuts (Add item, Shop mode, Scan receipt).
-- **Other ideas Brandon has seen:** voice add, a monthly budget on Spending, "use it up" pantry meals, stock-up alerts, dark mode, friendlier empty states.
-- **v57:**
-  - Receipts read the total and date and save a trip (`households/{hid}/trips`).
-  - 💵 Spending (in the list's ⋯ menu and the Stores header) shows 6 months of bars, totals by store, a trip list, add/edit/delete, and estimated vs. spent.
-  - 🔁 Usual items (`households/{hid}/usual`) learn from check-offs and receipts, need 3+ purchases, and show reminders on the list and in Shop mode.
-  - Receipt matches are shared with the household (`households/{hid}/aliases`).
-- **v58:**
-  - A per-lb item on a receipt line with no weight asks for the package weight.
-  - An item priced per each on a weighed line switches to per lb.
-  - An old per-each price no longer goes into the per-lb price history.
+- **App v59** (`APP_VERSION "2026.10.20-59"`). **Rules v18** (`RULES_VERSION "v18"`, see RULES-v18.md). v59 needed no rules change.
+- ⏳ **Waiting on Brandon:** rules v18 is NOT published (live console was v17 on Oct 20). Until it is, trips, usual items and shared receipt matches won't save. Then test v57–v59 on his phone.
+- **Next up:** save the complete live rules as `firestore.rules` with v18 merged, so future updates are one select-all paste. Read them in the browser (console → Firestore → Rules; the editor is CodeMirror) or ask Brandon to paste them. Claude never publishes rules itself.
+- **Ideas Brandon has seen, not built:** voice add, monthly budget on Spending, "use it up" pantry meals, stock-up alerts, dark mode, friendlier empty states, Play Store listing.
+- **v59:**
+  - 🧭 Shop mode learns your path per store (`loadPath`/`learnPath`/`pathGroups`, localStorage `path:<store>`, per device, no Firestore). Needs 3+ check-offs in a trip. A bar toggles "my path" / "aisle order".
+  - 📸 Trip-done polaroid after "Done shopping" (`openTripDone`): cart estimate, items, minutes, savings from moves (`movedNote`/`movedSavings`, localStorage), what's still left, then Scan receipt / Put away.
+  - 📲 Manifest shortcuts (`?go=add|shop|receipt`, `captureGo`/`runGo`, icons `sc-*.png`).
+  - Polish: check-off buzz + tilt (`checkedOff`, `.litem.pop`), shop rows hide ✕ and aisle signs, tied "cheapest store" bar hidden, AI reader dots round, pantry buttons no longer wrap, store page header uses icon buttons.
+- **v57–58:** trips + 💵 Spending, 🔁 usual items, shared receipt matches, per-lb weight prompts and price-history fix.
 
 ## Where things are
 - `app.js` (~7,000 lines) holds everything else. Search it by function name instead of reading it whole:
@@ -33,6 +28,7 @@ Read this file first in every new chat. Start one by saying **"continue Pickup B
   - Trips and spending: `loadTrips`, `addTrip`, `listEstimate`, `openSpending`.
   - Usual items: `notePurchases`, `unnotePurchase`, `dueUsual`, `usualBar`, `openUsual`.
   - Receipt matches: `localMatch`, `aliasMap`, `learnAliases`, `pushAliases`, `aliasesFromCloud`.
+  - Shop mode and trips: `openShopMode`, `pathGroups`, `openTripDone`, `checkedOff`; shortcuts `runGo`.
   - Other: label nutrition sync is `nutPush`/`nutFromCloud` (`households/{hid}/nutrition`, rules v17), Firebase listeners are in `subscribeAll`, and `runSecurityCheck` runs the rules check.
 - Recipes:
   - `QUICK_MEALS` in app.js plus `meals-more.js`.
@@ -63,9 +59,6 @@ The CDN is blocked in the cloud box. Test with Playwright against an in-memory F
 - Screenshot at 412×915 mobile.
 
 Do this before pushing anything with UI changes.
-
-## Ideas not started
-- Play Store listing (one-time $25 fee; steps are in SHARING.md).
 
 ## Working style
 - Batch the work, keep replies short, and keep usage low.

@@ -1,9 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { MORE_MEALS } from "./meals-more.js?v=58";
-import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=58";
-import { MEAL_VERSIONS } from "./meal-versions.js?v=58";
-import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=58";
-import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=58";
+import { MORE_MEALS } from "./meals-more.js?v=59";
+import { SEASONAL_MEALS, SEASON_TAGS } from "./seasonal.js?v=59";
+import { MEAL_VERSIONS } from "./meal-versions.js?v=59";
+import { nutrition, HEALTH, foodOf } from "./nutrition.js?v=59";
+import { DIETS, DIET_KEYS, dietStatus, applyDiet } from "./diets.js?v=59";
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail,
@@ -211,7 +211,7 @@ const hcol = (...p) => collection(db, "households", S.hid, ...p);
 const hdoc = (...p) => doc(db, "households", S.hid, ...p);
 // The item and store catalog is the original "inventory" and "stores" collections, shared by everyone.
 // Lists, events and members belong to a household.
-const APP_VERSION = "2026.10.18-58";
+const APP_VERSION = "2026.10.20-59";
 const RULES_VERSION = "v18";   // must match the _rules/{v} line in firestore.rules
 // Asks Firebase whether the newest rules are published: true, false, or null when offline.
 async function checkRules() {
@@ -893,6 +893,7 @@ function switchList(id) {
     if (S.tab === "create" && !(document.activeElement && document.activeElement.closest && document.activeElement.closest("#cookBody"))) renderCook();
     renderList(); renderStores();
     if (S.tab === "pantry") renderPantry();
+    if (S.go) runGo();
   }, onDataError);
 }
 
@@ -1420,8 +1421,9 @@ function renderHeader() {
                h("button", { class: "hbtn", "aria-label": "List options", text: "⋯", onclick: listMenu }));
   } else if (S.tab === "stores") {
     title.textContent = S.store ? S.store : "Stores";
-    act.append(h("button", { class: "hbtn", text: "📈 Prices", onclick: () => openPrices() }),
-               h("button", { class: "hbtn", text: "💵 Spending", onclick: openSpending }));
+    // Inside a store the title needs the room, so Prices and Spending shrink to their icons.
+    act.append(h("button", { class: "hbtn", "aria-label": "Prices", text: S.store ? "📈" : "📈 Prices", onclick: () => openPrices() }),
+               h("button", { class: "hbtn", "aria-label": "Spending", text: S.store ? "💵" : "💵 Spending", onclick: openSpending }));
     if (S.store) act.append(h("button", { class: "hbtn", "aria-label": "Store options", text: "⋯", onclick: () => storeMenu(S.store) }));
   } else if (S.tab === "pantry") {
     title.textContent = "Pantry";
@@ -1520,6 +1522,12 @@ function renderList() {
   }
 }
 
+// A check-off: a tiny buzz, a quick tilt of the card, and in Shop mode it's a step on your path through the store.
+const justDone = new Map();
+function checkedOff(it, on) {
+  if (on) { justDone.set(it.id, Date.now()); try { navigator.vibrate && navigator.vibrate(12); } catch (e) {} }
+  if (shopMode && shopMode.store === (it.store || "Other")) on ? shopMode.pick(it) : shopMode.unpick(it);
+}
 function listRow(it) {
   const p = priceNum(it.price);
   const metaText = qtyOf(it) > 1 && !isPerLb(it) ? "×" + qtyOf(it) : "";
@@ -1530,7 +1538,8 @@ function listRow(it) {
         p != null ? h("span", { class: "price", text: (metaText ? "  " : "") + money(lineTotal(it)) }) : null);
   const cheap = it.inCart ? null : cheaperAt(it);
   const home = it.inCart ? null : pantryMatch(it.name);
-  return h("div", { class: "litem" + (it.inCart ? " done" : "") },
+  const pop = it.inCart && justDone.get(it.id) > Date.now() - 900;
+  return h("div", { class: "litem" + (it.inCart ? " done" : "") + (pop ? " pop" : "") },
     h("button", { class: "cb" + (it.inCart ? " on" : ""), "aria-label": (it.inCart ? "Uncheck " : "Check ") + it.name,
       onclick: async () => {
         if (!it.inCart && isPerLb(it)) {   // sold by weight: ask what the scale said so the total is exact
@@ -1539,9 +1548,11 @@ function listRow(it) {
           const u = { inCart: true };
           if (w) u.lbs = w;
           notePurchases([{ name: it.name, store: it.store, inv: it.inventoryId }], it.store);
+          checkedOff(it, true);
           return updateDoc(itemDoc(S.listId, it.id), u).catch(fail);
         }
         if (it.inCart) unnotePurchase(it.name); else notePurchases([{ name: it.name, store: it.store, inv: it.inventoryId }], it.store);
+        checkedOff(it, !it.inCart);
         updateDoc(itemDoc(S.listId, it.id), { inCart: !it.inCart }).catch(fail);
       } },
       h("i", { text: it.inCart ? "✓" : "" })),
@@ -6582,14 +6593,18 @@ async function moveItems(list, label) {
       const o = it._orig || it;
       undo.push([it.id, { store: o.store || "Other", price: cleanPrice(o.price), inventoryId: o.inventoryId || null, aisle: o.aisle || "", image: o.image || "" }]);
       await updateDoc(itemDoc(S.listId, it.id), moveUpdate(it, s, p));
+      const was = priceNum(it.price), now = priceNum(p);
+      if (was != null && now != null) movedNote(it.id, s, (was - now) * (isPerLb(it) ? lbsOf(it) : qtyOf(it)));
     }
   } catch (e) { fail(e); return; }
-  toast(label, { label: "Undo", fn: () => undo.forEach(([id, u]) => updateDoc(itemDoc(S.listId, id), u).catch(fail)) });
+  toast(label, { label: "Undo", fn: () => undo.forEach(([id, u]) => { movedNote(id, "", 0); updateDoc(itemDoc(S.listId, id), u).catch(fail); }) });
 }
 function compareBar(items) {
   const c = listCompare(items);
   if (c.byStore.length < 2 && !c.moves.length) return null;
   const save = c.now - c.mix, best = c.byStore[0];
+  // Every store comes out about the same (usually: hardly any prices saved yet). Nothing worth showing.
+  if (save < 0.5 && c.byStore.length > 1 && c.byStore[1].total - best.total < 0.5) return null;
   return h("button", { class: "needbar cmpbar", type: "button", onclick: openCompare },
     h("span", { class: "nb-dot", text: "🏷️" }),
     h("div", {}, h("b", { text: save >= 0.5 ? `Save about ${money(save)} by switching ${c.moves.length} item${c.moves.length === 1 ? "" : "s"}` : `Cheapest store: ${best.s} ≈ ${money(best.total)}` }),
@@ -6641,32 +6656,125 @@ let shopMode = null;
 function openShopMode(store) {
   const s = openSheet(`🛒 ${store}`);
   const sheet = s.body.closest(".sheet"); if (sheet) sheet.classList.add("shopsheet");
+  lsSet("lastShop", store);
   let wake = null;
   const keepOn = async () => { try { if ("wakeLock" in navigator && document.visibilityState === "visible") wake = await navigator.wakeLock.request("screen"); } catch (e) {} };
   const vis = () => { if (shopMode) keepOn(); };
   document.addEventListener("visibilitychange", vis);
   keepOn();
+  const started = Date.now(), picks = [];
+  const path = loadPath(store);
+  let byPath = path.trips > 0 && lsGet("pathOff:" + norm(store)) !== "1";
   const draw = () => {
     if (s.closed) return;
     s.body.textContent = "";
     const all = S.listItems.map(listView).filter(i => (i.store || "Other") === store);
-    const left = all.filter(i => !i.inCart).sort(byAisle), done = all.filter(i => i.inCart);
-    const parts = [];
-    let last = null;
-    left.forEach(i => { const a = aisleLabel(i.aisle) || "No aisle"; if (a !== last) { parts.push(h("div", { class: "shopaisle", text: "🪧 " + a })); last = a; } parts.push(listRow(i)); });
+    const done = all.filter(i => i.inCart);
+    const groups = pathGroups(all.filter(i => !i.inCart), byPath ? path : null);
+    const parts = groups.flatMap(g => [h("div", { class: "shopaisle", text: "🪧 " + g.label }), ...g.items.map(listRow)]);
     const usual = dueUsual(store);
     put(s.body,
       h("div", { class: "shoptop" }, h("b", { text: `${done.length} of ${all.length} in the cart` }), h("span", { text: `${money(sum(done, lineTotal))} of ≈ ${money(sum(all, lineTotal))}` })),
+      path.trips > 0 && groups.length > 1 ? h("div", { class: "pathbar" },
+        h("span", { text: byPath ? `🧭 In the order you usually shop here` : "🪧 In aisle order" }),
+        h("button", { class: "link", type: "button", text: byPath ? "Aisle order" : "My path", onclick: () => { byPath = !byPath; lsSet("pathOff:" + norm(store), byPath ? "0" : "1"); draw(); } }))
+        : groups.length > 2 ? h("p", { class: "lmeta pathnote", text: "🧭 Shop in whatever order you like. Next time, this list follows your path through the store." }) : null,
       usual.length ? h("div", { class: "shopusual" }, h("div", { class: "lmeta", text: "🔁 You usually get these here by now:" }),
         h("div", { class: "chips-wrap" }, usual.slice(0, 8).map(x => h("button", { class: "chip", type: "button", "aria-label": `Add ${x.u.n}, bought ${everyText(x.every)}, last ${ago(x.last)}`, text: "＋ " + x.u.n, onclick: () => addUsual(x) })))) : null,
-      left.length ? h("div", { class: "gcard" }, parts) : h("div", { class: "empty small" }, h("b", { text: "All done here 🎉" }), all.length ? "Everything for this store is in the cart." : "Nothing on the list for this store."),
+      groups.length ? h("div", { class: "gcard" }, parts) : h("div", { class: "empty small" }, h("b", { text: "All done here 🎉" }), all.length ? "Everything for this store is in the cart." : "Nothing on the list for this store."),
       done.length ? h("details", { style: "margin-top:12px" }, h("summary", { class: "lmeta", text: `In the cart (${done.length})` }), h("div", { class: "gcard" }, done.map(listRow))) : null,
-      h("button", { class: "btn primary block", type: "button", style: "margin-top:14px", text: "Done shopping", onclick: () => s.close() }),
-      done.length ? h("button", { class: "btn block", type: "button", style: "margin-top:8px", text: "🧾 Scan the receipt · save the trip", onclick: () => { lsSet("lastStore", store); s.close(); receiptFlow(); } }) : null);
+      h("button", { class: "btn primary block", type: "button", style: "margin-top:14px", text: "Done shopping", onclick: () => {
+        const left = all.filter(i => !i.inCart);
+        s.close();
+        if (done.length) openTripDone({ store, done, left, mins: Math.round((Date.now() - started) / 60000) });
+      } }));
   };
-  shopMode = { store, draw };
-  s.onclose = () => { shopMode = null; document.removeEventListener("visibilitychange", vis); try { wake && wake.release(); } catch (e) {} };
+  shopMode = {
+    store, draw,
+    pick: it => { const k = norm(it.name); if (!picks.some(p => p.k === k)) picks.push({ k, a: aisleLabel(it.aisle) || "" }); },
+    unpick: it => { const k = norm(it.name), n = picks.findIndex(p => p.k === k); if (n >= 0) picks.splice(n, 1); }
+  };
+  s.onclose = () => { shopMode = null; learnPath(store, picks); document.removeEventListener("visibilitychange", vis); try { wake && wake.release(); } catch (e) {} };
   draw();
+}
+
+// 🧭 Store path: the order you actually pick things up at each store, learned on this phone from Shop mode.
+// Kept per device (no Firestore), so it costs nothing and needs no rules. Aisles and items each get a 0–1 spot.
+const pathKey = store => "path:" + norm(store);
+function loadPath(store) {
+  try { const p = JSON.parse(lsGet(pathKey(store)) || "null"); if (p && p.a && p.i) return p; } catch (e) {}
+  return { a: {}, i: {}, trips: 0 };
+}
+function learnPath(store, picks) {
+  if (picks.length < 3) return;   // too few check-offs to say anything about the route
+  const p = loadPath(store), t = Date.now();
+  const spot = (map, keys) => keys.forEach((k, n) => {
+    const r = keys.length > 1 ? n / (keys.length - 1) : 0.5, old = map[k];
+    map[k] = old ? [Math.round((old[0] * 0.6 + r * 0.4) * 1000) / 1000, t] : [Math.round(r * 1000) / 1000, t];
+  });
+  spot(p.a, [...new Set(picks.map(x => x.a).filter(Boolean))]);
+  spot(p.i, picks.map(x => x.k));
+  const old = Object.entries(p.i).sort((x, y) => y[1][1] - x[1][1]);   // keep the 300 most recent items
+  if (old.length > 300) p.i = Object.fromEntries(old.slice(0, 300));
+  p.trips = (p.trips || 0) + 1;
+  lsSet(pathKey(store), JSON.stringify(p));
+}
+// Items left to get, grouped by aisle. With a learned path, aisles (and items inside them) follow it;
+// aisles never seen yet slot in where their aisle number would put them.
+function pathGroups(items, path) {
+  const map = new Map();
+  items.slice().sort(byAisle).forEach(i => { const a = aisleLabel(i.aisle) || ""; if (!map.has(a)) map.set(a, []); map.get(a).push(i); });
+  const groups = [...map.entries()].map(([a, arr], n, list) => ({ a, label: a || "No aisle", items: arr, base: list.length > 1 ? n / (list.length - 1) : 0 }));
+  if (!path) return groups;
+  const itemSpot = i => (path.i[norm(i.name)] || [])[0];
+  const num = a => { const m = String(a).match(/(\d+)/); return m ? +m[1] : null; };
+  const seen = Object.entries(path.a).map(([a, v]) => ({ n: num(a), spot: v[0] })).filter(x => x.n != null);
+  groups.forEach(g => {
+    const known = g.items.map(itemSpot).filter(x => x != null), n = num(g.a);
+    // A numbered aisle you haven't shopped yet goes next to the closest numbered aisle you have.
+    const near = n != null && seen.length ? seen.slice().sort((x, y) => Math.abs(x.n - n) - Math.abs(y.n - n))[0] : null;
+    g.spot = g.a && path.a[g.a] ? path.a[g.a][0] : known.length ? known.reduce((x, y) => x + y, 0) / known.length
+      : near ? near.spot + (n - near.n) * 0.001 : g.base;
+    g.items.sort((x, y) => (itemSpot(x) ?? 2) - (itemSpot(y) ?? 2) || byAisle(x, y));
+  });
+  return groups.sort((x, y) => x.spot - y.spot || x.base - y.base);
+}
+
+// 📸 Trip done: a polaroid of the trip, then the next steps (receipt, putting things away).
+function openTripDone({ store, done, left, mins }) {
+  const s = openSheet("Trip done");
+  const spent = sum(done, lineTotal), saved = movedSavings(done, store);
+  const stat = (big, small) => h("div", {}, h("b", { text: big }), h("span", { text: small }));
+  put(s.body,
+    h("div", { class: "tripcard", role: "group", "aria-label": `Trip to ${store}` },
+      h("div", { class: "tc-photo", style: `--sc:${storeColor(store)}` },
+        h("div", { class: "tc-thumbs", "aria-hidden": "true" }, done.slice(0, 6).map(i => thumbEl(i.image, "tc-thumb"))),
+        h("div", { class: "tc-store" }, storeTag(store), h("b", { text: store }))),
+      h("div", { class: "tc-stats" },
+        stat(money(spent), "in the cart (est.)"),
+        stat(String(done.length), done.length === 1 ? "item" : "items"),
+        stat(mins >= 1 ? `${mins} min` : "< 1 min", "in the store")),
+      saved >= 0.5 ? h("div", { class: "tc-line good", text: `💡 Saved about ${money(saved)} by moving items to cheaper stores` }) : null,
+      left.length ? h("div", { class: "tc-line", text: `Still on the list: ${left.slice(0, 4).map(i => i.name).join(", ")}${left.length > 4 ? ` +${left.length - 4} more` : ""}` }) : h("div", { class: "tc-line good", text: "🎉 Got everything on the list for this store" }),
+      h("div", { class: "tc-caption", text: new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }) })),
+    h("button", { class: "btn primary block", type: "button", style: "margin-top:16px", text: "🧾 Scan the receipt · save the trip", onclick: () => { lsSet("lastStore", store); s.close(); receiptFlow(); } }),
+    h("div", { class: "actions", style: "margin-top:8px" },
+      h("button", { class: "btn", type: "button", text: "🧺 Put away", onclick: () => { s.close(); putAway(); } }),
+      h("button", { class: "btn", type: "button", text: "Close", onclick: () => s.close() })),
+    h("p", { class: "lmeta", style: "text-align:center;margin-top:10px", text: "Scanning the receipt keeps the real total in 💵 Spending and updates your prices." }));
+}
+// Savings from "Move to a cheaper store", kept on this phone until the item is bought.
+const movedKey = () => "moved:" + S.hid;
+function movedGet() { try { return JSON.parse(lsGet(movedKey()) || "{}") || {}; } catch (e) { return {}; } }
+function movedNote(id, s, save) {
+  const m = movedGet(), cut = Date.now() - 30 * 864e5;
+  Object.keys(m).forEach(k => { if (!(m[k].t > cut)) delete m[k]; });
+  if (save > 0) m[id] = { s, save: Math.round(save * 100) / 100, t: Date.now() }; else delete m[id];
+  lsSet(movedKey(), JSON.stringify(m));
+}
+function movedSavings(items, store) {
+  const m = movedGet();
+  return items.reduce((a, i) => a + (m[i.id] && m[i.id].s === store ? m[i.id].save : 0), 0);
 }
 const ago = d => { if (!d) return ""; const n = Math.round((Date.now() - d) / 864e5); return n <= 0 ? "today" : n === 1 ? "yesterday" : n < 14 ? `${n} days ago` : new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric" }); };
 // A tiny line of one store's prices over time. One series, so no legend; the numbers are listed beside it.
@@ -7068,6 +7176,28 @@ async function exportMyData() {
     history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : ""));
   }
 })();
+// 📲 Home-screen shortcuts (long-press the app icon): ?go=add | shop | receipt. Run once the list has loaded.
+(function captureGo() {
+  const q = new URLSearchParams(location.search), g = q.get("go");
+  if (!g) return;
+  if (["add", "shop", "receipt"].includes(g)) S.go = g;
+  q.delete("go");
+  history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "") + location.hash);
+})();
+function runGo() {
+  const g = S.go; S.go = null;
+  if (g === "receipt") return receiptFlow();
+  setTab("list");
+  if (g === "add") return setTimeout(() => { const i = $("#quickInput"); if (i) { i.scrollIntoView({ block: "center" }); i.focus(); } }, 150);
+  if (g !== "shop") return;
+  const stores = [...new Set(S.listItems.map(listView).filter(i => !i.inCart).map(i => i.store || "Other"))];
+  if (!stores.length) return toast("Nothing left to get on this list");
+  if (stores.length === 1) return openShopMode(stores[0]);
+  const last = lsGet("lastShop");
+  stores.sort((a, b) => (b === last) - (a === last) || a.localeCompare(b));
+  choose("🛒 Shopping at…", "Which store are you in?", [...stores.map((st, n) => ({ label: st, value: st, cls: n ? "" : "primary" })), { label: "Cancel", value: null }])
+    .then(v => { if (v) openShopMode(v); });
+}
 document.querySelectorAll(".tabs button[data-tab]").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
 const syncOnline = () => $("#offline").classList.toggle("hidden", navigator.onLine);
 window.addEventListener("online", syncOnline); window.addEventListener("offline", syncOnline); syncOnline();

@@ -37,5 +37,46 @@
       "text": "share-text",
       "url": "share-url"
     }
-  }
+  },
+  "shortcuts": [
+    {
+      "name": "Add an item",
+      "short_name": "Add item",
+      "description": "Add something to the shopping list",
+      "url": "./?go=add",
+      "icons": [
+        {
+          "src": "sc-add.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Shop mode",
+      "short_name": "Shop",
+      "description": "Shop one store aisle by aisle",
+      "url": "./?go=shop",
+      "icons": [
+        {
+          "src": "sc-shop.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Scan a receipt",
+      "short_name": "Receipt",
+      "description": "Update prices and save the trip",
+      "url": "./?go=receipt",
+      "icons": [
+        {
+          "src": "sc-receipt.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
 }
